@@ -1,0 +1,23 @@
+<main class="home-shell">
+  <section class="projects-panel">
+    <header class="projects-header">
+      <div>
+        <p class="eyebrow">Workspace</p>
+        <h1>Projects</h1>
+      </div>
+    </header>
+
+    <div class="projects-list">
+      @for (project of projects; track project.title) {
+        <a class="project-card" [routerLink]="['/projects', project.id]">
+          <div class="project-copy">
+            <h2>{{ project.title }}</h2>
+            <p class="project-description">{{ project.description }}</p>
+            <p class="project-updated">{{ project.updatedLabel }}</p>
+          </div>
+          <div class="project-arrow" aria-hidden="true">›</div>
+        </a>
+      }
+    </div>
+  </section>
+</main>

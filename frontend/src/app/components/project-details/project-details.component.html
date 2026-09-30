@@ -1,0 +1,42 @@
+<main class="details-shell">
+  <section class="details-panel">
+    <a class="back-link" routerLink="/">← Back to Projects</a>
+
+    <header class="details-header">
+      <h1>{{ project.title }}</h1>
+    </header>
+
+    <nav class="tabs" aria-label="Project sections">
+      @for (tab of tabs; track tab.label) {
+        <button class="tab" [class.active]="tab.active" type="button">
+          {{ tab.label }}
+        </button>
+      }
+    </nav>
+
+    <section class="overview-card">
+      <div class="overview-block">
+        <h2>Description</h2>
+        <p>{{ project.description }}</p>
+      </div>
+
+      <div class="overview-block">
+        <h2>Key Entities</h2>
+        <ul>
+          @for (entity of project.keyEntities; track entity) {
+            <li>{{ entity }}</li>
+          }
+        </ul>
+      </div>
+
+      <div class="overview-block">
+        <h2>Pipeline Stages</h2>
+        <p>{{ project.pipelineStages.join(' → ') }}</p>
+      </div>
+
+      <div class="chat-cta">
+        <a class="chat-button" [routerLink]="['/projects', project.id, 'chat']">Chat with AI</a>
+      </div>
+    </section>
+  </section>
+</main>

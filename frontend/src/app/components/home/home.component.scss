@@ -1,0 +1,116 @@
+:host {
+  display: block;
+}
+
+.home-shell {
+  min-height: 100vh;
+  padding: 28px 24px 40px;
+  background:
+    radial-gradient(circle at top left, rgba(84, 153, 255, 0.12), transparent 32%),
+    linear-gradient(180deg, #f7f9fd 0%, #eef3fb 100%);
+}
+
+.projects-panel {
+  max-width: 520px;
+  margin: 0 auto;
+}
+
+.projects-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.eyebrow {
+  margin: 0 0 6px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #7d8ea8;
+}
+
+.projects-header h1 {
+  margin: 0;
+  font-size: clamp(2rem, 4vw, 2.5rem);
+  line-height: 1;
+  font-weight: 800;
+  color: #152238;
+}
+
+.projects-list {
+  display: grid;
+  gap: 16px;
+}
+
+.project-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 18px 18px 20px;
+  border: 1px solid rgba(86, 107, 140, 0.16);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 10px 24px rgba(19, 35, 68, 0.06);
+  backdrop-filter: blur(8px);
+  color: inherit;
+  text-decoration: none;
+  transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
+}
+
+.project-card:hover {
+  transform: translateY(-1px);
+  border-color: rgba(42, 109, 245, 0.28);
+  box-shadow: 0 12px 28px rgba(19, 35, 68, 0.09);
+}
+
+.project-copy {
+  min-width: 0;
+}
+
+.project-copy h2 {
+  margin: 0 0 8px;
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: #1a2538;
+}
+
+.project-description,
+.project-updated {
+  margin: 0;
+  color: #6f7f95;
+  line-height: 1.45;
+}
+
+.project-description {
+  font-size: 0.98rem;
+}
+
+.project-updated {
+  margin-top: 8px;
+  font-size: 0.92rem;
+}
+
+.project-arrow {
+  flex: 0 0 auto;
+  font-size: 2rem;
+  line-height: 1;
+  color: #5f6f86;
+  transform: translateY(-1px);
+}
+
+@media (max-width: 576px) {
+  .home-shell {
+    padding: 20px 14px 28px;
+  }
+
+  .project-card {
+    padding: 16px 14px 16px 16px;
+  }
+
+  .project-arrow {
+    font-size: 1.75rem;
+  }
+}

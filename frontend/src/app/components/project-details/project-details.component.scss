@@ -1,0 +1,144 @@
+:host {
+  display: block;
+}
+
+.details-shell {
+  min-height: 100vh;
+  padding: 24px;
+  background:
+    radial-gradient(circle at top left, rgba(84, 153, 255, 0.12), transparent 32%),
+    linear-gradient(180deg, #f7f9fd 0%, #eef3fb 100%);
+}
+
+.details-panel {
+  max-width: 860px;
+  margin: 0 auto;
+}
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  color: #2a6df5;
+  text-decoration: none;
+  font-size: 0.98rem;
+  font-weight: 700;
+}
+
+.details-header h1 {
+  margin: 0 0 18px;
+  font-size: clamp(2rem, 4vw, 2.6rem);
+  line-height: 1.1;
+  font-weight: 800;
+  color: #152238;
+}
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  border-bottom: 1px solid rgba(86, 107, 140, 0.2);
+  margin-bottom: 18px;
+}
+
+.tab {
+  position: relative;
+  padding: 12px 0 14px;
+  border: 0;
+  background: transparent;
+  color: #6d7f97;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: default;
+}
+
+.tab.active {
+  color: #2a6df5;
+}
+
+.tab.active::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 3px;
+  border-radius: 999px;
+  background: #2a6df5;
+}
+
+.overview-card {
+  padding: 22px 22px 24px;
+  border: 1px solid rgba(86, 107, 140, 0.16);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 10px 24px rgba(19, 35, 68, 0.06);
+}
+
+.overview-block + .overview-block {
+  margin-top: 24px;
+}
+
+.overview-block h2 {
+  margin: 0 0 8px;
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: #1a2538;
+}
+
+.overview-block p,
+.overview-block li {
+  margin: 0;
+  color: #6f7f95;
+  line-height: 1.55;
+  font-size: 1rem;
+}
+
+.overview-block ul {
+  margin: 0;
+  padding-left: 22px;
+}
+
+.overview-block li + li {
+  margin-top: 6px;
+}
+
+.chat-cta {
+  margin-top: 28px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.chat-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 160px;
+  height: 46px;
+  padding: 0 18px;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #2f7df7 0%, #2567e0 100%);
+  color: #fff;
+  text-decoration: none;
+  font-weight: 700;
+  box-shadow: 0 12px 24px rgba(42, 109, 245, 0.22);
+}
+
+@media (max-width: 576px) {
+  .details-shell {
+    padding: 18px 14px 24px;
+  }
+
+  .overview-card {
+    padding: 18px 16px 20px;
+  }
+
+  .chat-cta {
+    justify-content: stretch;
+  }
+
+  .chat-button {
+    width: 100%;
+  }
+}

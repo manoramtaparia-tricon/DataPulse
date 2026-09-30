@@ -1,0 +1,49 @@
+<main class="chat-shell">
+  <section class="chat-panel">
+    <div class="chat-header">
+      <a class="back-link" [routerLink]="['/projects', project.id]">← Back to Project</a>
+      <h1>{{ project.title }}</h1>
+      <p>Ask the AI to diagnose issues in this pipeline.</p>
+    </div>
+
+    <section class="messages" aria-live="polite">
+      @for (message of messages; track $index) {
+        <div class="message-row" [class.user]="message.sender === 'user'" [class.assistant]="message.sender === 'assistant'">
+          <div class="avatar">{{ message.sender === 'user' ? 'U' : 'A' }}</div>
+          <div class="bubble" [class.loading]="message.loading">
+            @if (message.loading) {
+              <div class="loading-copy">
+                <div class="loading-title-row">
+                  <p class="loading-title">Checking the data for {{ project.title }}...</p>
+                  <span class="typing-dots" aria-hidden="true">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                  </span>
+                </div>
+                <ul>
+                  @for (step of loaderSteps; track step; let stepIndex = $index) {
+                    <li [class.active]="stepIndex === activeLoaderStepIndex">{{ step }}</li>
+                  }
+                </ul>
+              </div>
+            } @else {
+              <p>{{ message.text }}</p>
+            }
+          </div>
+        </div>
+      }
+    </section>
+
+    <form class="composer" (ngSubmit)="sendQuestion()">
+      <input
+        [value]="question"
+        type="text"
+        placeholder="Ask a question about your data..."
+        autocomplete="off"
+        (input)="updateQuestion($event)"
+      />
+      <button type="submit" [disabled]="loading">{{ loading ? 'Sending...' : 'Send' }}</button>
+    </form>
+  </section>
+</main>
