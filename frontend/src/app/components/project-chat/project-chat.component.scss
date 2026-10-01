@@ -1,0 +1,246 @@
+:host {
+  display: block;
+}
+
+.chat-shell {
+  min-height: 100vh;
+  padding: 24px;
+  background:
+    radial-gradient(circle at top left, rgba(84, 153, 255, 0.12), transparent 32%),
+    linear-gradient(180deg, #f7f9fd 0%, #eef3fb 100%);
+}
+
+.chat-panel {
+  max-width: 880px;
+  margin: 0 auto;
+  display: flex;
+  min-height: calc(100vh - 48px);
+  flex-direction: column;
+}
+
+.chat-header {
+  padding-bottom: 18px;
+  border-bottom: 1px solid rgba(86, 107, 140, 0.18);
+}
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  color: #2a6df5;
+  text-decoration: none;
+  font-size: 0.98rem;
+  font-weight: 700;
+}
+
+.chat-header h1 {
+  margin: 0 0 6px;
+  font-size: clamp(1.7rem, 4vw, 2.3rem);
+  font-weight: 800;
+  color: #152238;
+}
+
+.chat-header p {
+  margin: 0;
+  color: #6f7f95;
+}
+
+.messages {
+  flex: 1;
+  padding: 28px 0;
+  display: grid;
+  gap: 18px;
+  align-content: start;
+}
+
+.message-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.message-row.user {
+  flex-direction: row-reverse;
+}
+
+.avatar {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #e1e7f2;
+  color: #3c4a61;
+  font-weight: 800;
+}
+
+.message-row.user .avatar {
+  background: #dbe7ff;
+  color: #2a6df5;
+}
+
+.bubble {
+  max-width: min(640px, calc(100% - 60px));
+  padding: 16px 18px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(86, 107, 140, 0.14);
+  box-shadow: 0 10px 24px rgba(19, 35, 68, 0.06);
+  color: #243247;
+  line-height: 1.55;
+}
+
+.message-row.user .bubble {
+  background: #dfe9ff;
+  border-color: rgba(42, 109, 245, 0.12);
+}
+
+.bubble p {
+  margin: 0;
+}
+
+.tracking-message {
+  padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.bubble.loading {
+  position: relative;
+  overflow: hidden;
+}
+
+.bubble.loading::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(120deg, transparent 0%, rgba(42, 109, 245, 0.06) 50%, transparent 100%);
+  transform: translateX(-100%);
+  animation: shimmer 1.9s ease-in-out infinite;
+}
+
+.loading-copy {
+  position: relative;
+  z-index: 1;
+}
+
+.loading-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 10px;
+}
+
+.loading-copy .loading-title {
+  font-weight: 700;
+  color: #243247;
+}
+
+.typing-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
+.typing-dots span {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #2a6df5;
+  opacity: 0.45;
+  animation: bounce 1s infinite ease-in-out;
+}
+
+.typing-dots span:nth-child(2) {
+  animation-delay: 0.16s;
+}
+
+.typing-dots span:nth-child(3) {
+  animation-delay: 0.32s;
+}
+
+.loading-copy ul {
+  margin: 0;
+  padding-left: 20px;
+  color: #6f7f95;
+}
+
+.loading-copy li + li {
+  margin-top: 6px;
+}
+
+.loading-copy li {
+  transition: color 180ms ease, transform 180ms ease;
+}
+
+.loading-copy li.active {
+  color: #2a6df5;
+  transform: translateX(2px);
+}
+
+.composer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: auto;
+  padding-top: 18px;
+}
+
+.composer input {
+  flex: 1;
+  min-width: 0;
+  height: 54px;
+  padding: 0 16px;
+  border: 1px solid rgba(86, 107, 140, 0.18);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 10px 24px rgba(19, 35, 68, 0.05);
+  font: inherit;
+  color: #152238;
+}
+
+.composer input::placeholder {
+  color: #8a97ab;
+}
+
+.composer button {
+  height: 54px;
+  padding: 0 24px;
+  border: 0;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #2f7df7 0%, #2567e0 100%);
+  color: #fff;
+  font-size: 0.98rem;
+  font-weight: 700;
+  box-shadow: 0 12px 24px rgba(42, 109, 245, 0.24);
+}
+
+.composer button:disabled {
+  opacity: 0.75;
+}
+
+@media (max-width: 576px) {
+  .chat-shell {
+    padding: 18px 14px 20px;
+  }
+
+  .composer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .composer button,
+  .composer input {
+    width: 100%;
+  }
+
+  .loading-title-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
