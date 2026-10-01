@@ -1,17 +1,20 @@
 import { Component, inject, OnDestroy } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { ProjectChatService } from '../../services/project-chat/project-chat.service';
+import { ProjectChatService, TrackingResponse } from '../../services/project-chat/project-chat.service';
 
 interface ChatMessage {
   sender: 'user' | 'assistant';
-  text: string;
+  kind: 'text' | 'loading' | 'tracking';
+  text?: string;
   loading?: boolean;
+  tracking?: TrackingResponse;
 }
 
 @Component({
   selector: 'app-project-chat',
   standalone: true,
-  imports: [RouterLink],
+  imports: [FormsModule, RouterLink],
   templateUrl: './project-chat.component.html',
   styleUrl: './project-chat.component.scss'
 })
@@ -24,16 +27,7 @@ export class ProjectChatComponent implements OnDestroy {
   protected readonly project = this.chatService.getProject(this.route.snapshot.paramMap.get('id') ?? 'customer-data-platform');
   protected readonly loaderSteps = this.chatService.getLoaderSteps();
 
-  protected messages: ChatMessage[] = [
-    {
-      sender: 'user',
-      text: 'Where is customer C123? Why is it not in the Gold table?'
-    },
-    {
-      sender: 'assistant',
-      text: 'Checking the data for customer C123 across all pipeline stages...'
-    }
-  ];
+  protected messages: ChatMessage[] = [];
 
   protected question = '';
   protected loading = false;
@@ -50,12 +44,13 @@ export class ProjectChatComponent implements OnDestroy {
       return;
     }
 
-    this.messages = [...this.messages, { sender: 'user', text: trimmedQuestion }];
+    this.messages = [...this.messages, { sender: 'user', kind: 'text', text: trimmedQuestion }];
     this.question = '';
     this.loading = true;
 
     const loaderMessage: ChatMessage = {
       sender: 'assistant',
+      kind: 'loading',
       text: this.loaderSteps[0],
       loading: true
     };
@@ -78,15 +73,33 @@ export class ProjectChatComponent implements OnDestroy {
       }
     }, 520);
 
-    void this.chatService.submitQuestion(this.project.title, trimmedQuestion).then((reply) => {
-      if (this.isDestroyed) {
-        return;
-      }
+      void this.chatService.submitQuestion(this.project.title, trimmedQuestion)
+        .then((tracking) => {
+          if (this.isDestroyed) {
+            return;
+          }
 
-      this.clearLoaderAnimation();
-      this.messages = this.messages.slice(0, -1).concat({ sender: 'assistant', text: reply });
-      this.loading = false;
-    });
+          this.clearLoaderAnimation();
+          this.messages = this.messages.slice(0, -1).concat({
+            sender: 'assistant',
+            kind: 'tracking',
+            tracking
+          });
+          this.loading = false;
+        })
+        .catch(() => {
+          if (this.isDestroyed) {
+            return;
+          }
+
+          this.clearLoaderAnimation();
+          this.messages = this.messages.slice(0, -1).concat({
+            sender: 'assistant',
+            kind: 'text',
+            text: 'Unable to reach the diagnostic service right now. Please try again.'
+          });
+          this.loading = false;
+        });
   }
 
   private clearLoaderAnimation(): void {

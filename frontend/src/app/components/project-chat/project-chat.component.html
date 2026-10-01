@@ -10,8 +10,8 @@
       @for (message of messages; track $index) {
         <div class="message-row" [class.user]="message.sender === 'user'" [class.assistant]="message.sender === 'assistant'">
           <div class="avatar">{{ message.sender === 'user' ? 'U' : 'A' }}</div>
-          <div class="bubble" [class.loading]="message.loading">
-            @if (message.loading) {
+          <div class="bubble" [class.loading]="message.kind === 'loading'" [class.tracking-message]="message.kind === 'tracking'">
+            @if (message.kind === 'loading') {
               <div class="loading-copy">
                 <div class="loading-title-row">
                   <p class="loading-title">Checking the data for {{ project.title }}...</p>
@@ -26,6 +26,43 @@
                     <li [class.active]="stepIndex === activeLoaderStepIndex">{{ step }}</li>
                   }
                 </ul>
+              </div>
+            } @else if (message.kind === 'tracking' && message.tracking) {
+              <div class="tracking-card">
+                <div class="tracking-card-header">
+                  <h2>{{ message.tracking.title }}</h2>
+                </div>
+
+                <div class="tracking-timeline">
+                  @for (item of message.tracking.timeline; track item.stage) {
+                    <div class="tracking-row">
+                      <div class="tracking-dot" [class.success]="item.tone === 'success'" [class.warning]="item.tone === 'warning'" [class.muted]="item.tone === 'muted'"></div>
+                      <div class="tracking-content">
+                        <div class="tracking-topline">
+                          <p class="tracking-stage">{{ item.stage }} <span>{{ item.detail }}</span></p>
+                          <span class="tracking-badge" [class.success]="item.tone === 'success'" [class.warning]="item.tone === 'warning'" [class.muted]="item.tone === 'muted'">{{ item.status }}</span>
+                          <span class="tracking-time">{{ item.timestamp }}</span>
+                        </div>
+                      </div>
+                    </div>
+                  }
+                </div>
+
+                <div class="tracking-summary">
+                  <div class="tracking-summary-icon">!</div>
+                  <div>
+                    <p class="tracking-summary-title">Status: {{ message.tracking.summary.status }}</p>
+                    <p class="tracking-summary-text">{{ message.tracking.summary.message }}</p>
+                  </div>
+                </div>
+
+                <div class="tracking-actions">
+                  @for (action of message.tracking.actions; track action.label) {
+                    <button type="button" class="tracking-action" [class.primary]="action.tone === 'primary'" [class.secondary]="action.tone === 'secondary'">
+                      {{ action.label }}
+                    </button>
+                  }
+                </div>
               </div>
             } @else {
               <p>{{ message.text }}</p>

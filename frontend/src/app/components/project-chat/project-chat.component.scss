@@ -101,6 +101,13 @@
   margin: 0;
 }
 
+.tracking-message {
+  padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
 .bubble.loading {
   position: relative;
   overflow: hidden;
@@ -235,29 +242,5 @@
   .loading-title-row {
     align-items: flex-start;
     flex-direction: column;
-  }
-}
-
-@keyframes bounce {
-  0%,
-  80%,
-  100% {
-    transform: translateY(0);
-    opacity: 0.45;
-  }
-
-  40% {
-    transform: translateY(-4px);
-    opacity: 1;
-  }
-}
-
-@keyframes shimmer {
-  0% {
-    transform: translateX(-100%);
-  }
-
-  100% {
-    transform: translateX(100%);
   }
 }

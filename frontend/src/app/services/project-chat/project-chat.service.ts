@@ -5,10 +5,40 @@ export interface ChatProjectSummary {
   title: string;
 }
 
+export interface TrackingTimelineItem {
+  stage: string;
+  detail: string;
+  status: string;
+  timestamp: string;
+  tone: 'success' | 'warning' | 'muted';
+}
+
+export interface TrackingAction {
+  label: string;
+  tone: 'primary' | 'secondary';
+}
+
+export interface TrackingSummary {
+  status: string;
+  message: string;
+}
+
+export interface TrackingResponse {
+  title: string;
+  customerId: string;
+  projectTitle: string;
+  question: string;
+  timeline: TrackingTimelineItem[];
+  summary: TrackingSummary;
+  actions: TrackingAction[];
+}
+
 @Injectable({
   providedIn: 'root'
 })
 export class ProjectChatService {
+  private readonly apiBaseUrl = 'http://localhost:3001';
+
   private readonly projects: Record<string, ChatProjectSummary> = {
     'customer-data-platform': {
       id: 'customer-data-platform',
@@ -28,18 +58,23 @@ export class ProjectChatService {
     return this.projects[id] ?? this.projects['customer-data-platform'];
   }
 
-  buildAssistantReply(projectTitle: string, question: string): string {
-    return `I checked the ${projectTitle} pipeline for "${question}". The issue appears to be in the Bronze to Silver reconciliation path. I am correlating source events, pipeline runs, and entity mappings now.`;
-  }
-
-  submitQuestion(projectTitle: string, question: string): Promise<string> {
-    return new Promise((resolve) => {
-      const latency = 2200 + Math.floor(Math.random() * 900);
-
-      setTimeout(() => {
-        resolve(this.buildAssistantReply(projectTitle, question));
-      }, latency);
+  async submitQuestion(projectTitle: string, question: string): Promise<TrackingResponse> {
+    const response = await fetch(`${this.apiBaseUrl}/api/diagnose`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        projectTitle,
+        question
+      })
     });
+
+    if (!response.ok) {
+      throw new Error('Unable to fetch the pipeline diagnosis.');
+    }
+
+    return response.json() as Promise<TrackingResponse>;
   }
 
   getLoaderSteps(): string[] {
