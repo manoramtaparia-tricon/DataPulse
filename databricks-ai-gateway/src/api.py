@@ -61,8 +61,6 @@ def to_ui_shape(result, question, project_title):
             "actions": obj.get("actions", []),
         }
 
-    # General question: no layer timeline — carry the answer in summary.message,
-    # same as lineage mode, so the UI always reads the text from one place.
     answer = result.get("text") or (data.get("answer", "") if isinstance(data, dict) else "")
     return {
         "title": "Analysis",
