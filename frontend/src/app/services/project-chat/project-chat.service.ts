@@ -37,7 +37,7 @@ export interface TrackingResponse {
   providedIn: 'root'
 })
 export class ProjectChatService {
-  private readonly apiBaseUrl = 'http://localhost:3001';
+  private readonly apiBaseUrl = 'http://localhost:8000';
 
   private readonly projects: Record<string, ChatProjectSummary> = {
     'customer-data-platform': {
