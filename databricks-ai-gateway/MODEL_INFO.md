@@ -11,7 +11,7 @@ We use **Google Gemini 3.5 Flash-Lite** (`gemini-3.5-flash-lite`) in our AI agen
 | **Cost** | One of the cheapest Gemini models — ideal for a POC where the agent makes multiple API calls per question |
 | **Speed** | ~350 output tokens/sec (per Artificial Analysis benchmark, cited by Google) — fast enough for live demos |
 | **Function calling** | Native support for function calling, structured outputs, and tool use — critical for our SQL generation workflow |
-| **Context window** | 1M tokens — large enough to load README + pipeline code + all 7 table schemas in a single prompt |
+| **Context window** | 1M tokens — large enough to load DATA_PLATFORM.md + pipeline code + all 7 table schemas in a single prompt |
 | **Good enough reasoning** | Handles SQL generation and result analysis well for our use case |
 
 ## Specifications
@@ -81,7 +81,7 @@ We chose 3.5 Flash-Lite as the sweet spot — significantly better reasoning tha
 ```
 User Question
     ↓
-Agent (Python) sends question + README + pipeline code + table schemas → Gemini 3.5 Flash-Lite
+Agent (Python) sends question + DATA_PLATFORM.md + pipeline code + table schemas → Gemini 3.5 Flash-Lite
     ↓
 Gemini generates SQL queries (SELECT only)
     ↓

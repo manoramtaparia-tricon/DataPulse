@@ -15,7 +15,7 @@ databricks-gemini-mcp/
 ├── .env                       # Credentials (Databricks + Gemini)
 ├── .gitignore
 ├── requirements.txt
-├── README.md                  # Architecture documentation (AI reads this)
+├── DATA_PLATFORM.md           # Architecture documentation (AI reads this)
 ├── SETUP.md                   # This file
 ├── DEMO_SCRIPT.md             # Presentation walkthrough
 ├── scripts/
@@ -164,7 +164,7 @@ Bronze → Silver drop-off: ~12% filtered
 python src/agent.py
 ```
 
-The agent loads the README, pipeline code, and table schemas at startup, then presents an interactive prompt.
+The agent loads `DATA_PLATFORM.md` and the pipeline code at startup, then presents an interactive prompt.
 
 ### Example questions to try:
 
