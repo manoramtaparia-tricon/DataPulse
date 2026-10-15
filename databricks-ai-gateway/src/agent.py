@@ -408,7 +408,9 @@ Based on the actual query results:
 3. If the question involves tracing data lineage, explain which tables and transformations are involved
 4. If data is missing, explain which transformation step likely filtered it out and why
 
-Keep your answer focused and practical. Use the documentation to explain the architecture but rely on the actual query results for the data."""
+Keep your answer focused and practical. Use the documentation to explain the architecture but rely on the actual query results for the data.
+
+Write in plain text only — no Markdown. Do not use asterisks for bold, hash symbols for headings, or backticks. Use short paragraphs and, where you list items, plain numbered lines (e.g. "1. ...")."""
 
         print("  Analyzing results...\n")
         analysis = self._call_gemini(analysis_prompt)
