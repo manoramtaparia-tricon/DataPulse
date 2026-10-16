@@ -34,12 +34,12 @@
                 </div>
 
                 <div class="tracking-timeline">
-                  @for (item of message.tracking.timeline; track item.stage) {
+                  @for (item of message.tracking.timeline; track $index) {
                     <div class="tracking-row">
                       <div class="tracking-dot" [class.success]="item.tone === 'success'" [class.warning]="item.tone === 'warning'" [class.muted]="item.tone === 'muted'"></div>
                       <div class="tracking-content">
                         <div class="tracking-topline">
-                          <p class="tracking-stage">{{ item.stage }} <span>{{ item.detail }}</span></p>
+                          <p class="tracking-stage">{{ item.stage }} <span>{{ shortTable(item.table) }}</span></p>
                           <span class="tracking-badge" [class.success]="item.tone === 'success'" [class.warning]="item.tone === 'warning'" [class.muted]="item.tone === 'muted'">{{ item.status }}</span>
                           <span class="tracking-time">{{ item.timestamp }}</span>
                         </div>
