@@ -7,7 +7,10 @@ export interface ChatProjectSummary {
 
 export interface TrackingTimelineItem {
   stage: string;
+  layer?: string;
+  table?: string;
   detail: string;
+  count?: number | null;
   status: string;
   timestamp: string;
   tone: 'success' | 'warning' | 'muted';
