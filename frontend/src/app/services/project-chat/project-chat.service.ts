@@ -37,7 +37,7 @@ export interface TrackingResponse {
   providedIn: 'root'
 })
 export class ProjectChatService {
-  private readonly apiBaseUrl = 'http://localhost:3001';
+  private readonly apiBaseUrl = 'http://localhost:8001';
 
   private readonly projects: Record<string, ChatProjectSummary> = {
     'customer-data-platform': {
@@ -71,7 +71,11 @@ export class ProjectChatService {
     });
 
     if (!response.ok) {
-      throw new Error('Unable to fetch the pipeline diagnosis.');
+      const failure: unknown = await response.json();
+      const message = failure && typeof failure === 'object' && 'message' in failure
+        && typeof failure.message === 'string'
+        ? failure.message : 'Unable to fetch the pipeline diagnosis.';
+      throw new Error(message);
     }
 
     return response.json() as Promise<TrackingResponse>;
