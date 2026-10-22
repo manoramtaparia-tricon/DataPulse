@@ -145,8 +145,35 @@ class Agent:
             print("  Could not plan a lineage trace — falling back to general analysis.\n")
             return self._investigate_general(question)
 
+        layer_rank = {"Bronze": 0, "Silver": 1, "Gold": 2}
+        stages.sort(key=lambda s: layer_rank.get(s.get("layer"), 99))
+
         executed = []
+        blocked = False
+        current_layer = None
+        layer_found = False      # entity seen in any table of the current layer
+        layer_ok = True          # every check in the current layer ran without error
         for stage in stages:
+            layer = stage.get("layer")
+            if layer != current_layer:
+                if current_layer is not None and layer_ok and not layer_found:
+                    blocked = True  # previous layer was entirely empty
+                current_layer = layer
+                layer_found = False
+                layer_ok = True
+
+            if blocked:
+                stage["count"] = 0
+                stage["last_seen"] = None
+                stage["error"] = None
+                stage["skipped"] = True
+                print(f"  Skipping {stage.get('stage')} ({stage.get('table')}) — upstream layer empty")
+                executed.append(
+                    f"--- {stage.get('stage')} ({stage.get('table')}) ---\n"
+                    f"SKIPPED: an upstream layer was empty, so this cannot contain the entity"
+                )
+                continue
+
             sql = stage["sql"]
             print(f"  Checking {stage.get('stage')} ({stage.get('table')})...")
             columns, rows, status = self._run_sql(sql)
@@ -161,6 +188,10 @@ class Agent:
             stage["count"] = count
             stage["last_seen"] = last_seen
             stage["error"] = None if count is not None else status
+            if count is None:
+                layer_ok = False
+            elif count > 0:
+                layer_found = True
             executed.append(
                 f"--- {stage.get('stage')} ({stage.get('table')}) ---\n"
                 f"SQL: {sql}\nRESULT: count={count}, last_seen={last_seen} {status}"
@@ -208,6 +239,9 @@ class Agent:
     def _build_timeline(self, stages):
         # A stage is "Stuck" when it is the first absent layer after the entity was
         # present earlier; any later absent layers are "Not found".
+        # Skipped stages (downstream of an empty layer, never queried) are left out
+        # of the timeline entirely — the trace ends where the trail went cold.
+        stages = [s for s in stages if not s.get("skipped")]
         timeline = []
         seen_present = False
         stuck_marked = False
