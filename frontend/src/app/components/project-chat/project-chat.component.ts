@@ -37,6 +37,11 @@ export class ProjectChatComponent implements OnDestroy {
     this.question = (event.target as HTMLInputElement).value;
   }
 
+  // Show the table name
+  protected shortTable(table: string | undefined): string {
+    return table ? table.split('.').pop() ?? table : '';
+  }
+
   protected sendQuestion(): void {
     const trimmedQuestion = this.question.trim();
 
