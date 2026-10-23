@@ -3,7 +3,7 @@
 Run from the project root:
     uvicorn src.api:app --port 8001
 
-POST /api/diagnose  {"question": "...", "projectTitle": "..."}  -> tracking JSON
+POST /api/diagnose  {"question": "..."}  -> tracking JSON
 GET  /health
 """
 
@@ -17,7 +17,6 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from starlette.concurrency import run_in_threadpool
 
 from src.agent import Agent
 from src.guardrails_service import GuardrailBlocked, GuardrailUnavailable, GuardrailsService
@@ -46,10 +45,9 @@ def _startup():
 
 class DiagnoseRequest(BaseModel):
     question: str
-    projectTitle: str = "Customer Data Platform"
 
 
-def to_ui_shape(result, question, project_title):
+def to_ui_shape(result, question):
     """Map the agent's investigate() output to the UI's tracking contract."""
     mode = result.get("mode")
     data = result.get("data") or {}
@@ -61,7 +59,6 @@ def to_ui_shape(result, question, project_title):
             "entityType": obj.get("entityType"),
             "entityId": obj.get("entityId"),
             "customerId": obj.get("entityId"),
-            "projectTitle": project_title,
             "question": question,
             "timeline": obj.get("timeline", []),
             "summary": obj.get("summary", {}),
@@ -74,7 +71,6 @@ def to_ui_shape(result, question, project_title):
         "entityType": None,
         "entityId": None,
         "customerId": None,
-        "projectTitle": project_title,
         "question": question,
         "timeline": [],
         "summary": {"status": "ANSWER", "message": answer},
@@ -92,14 +88,14 @@ async def diagnose(req: DiagnoseRequest):
     question = (req.question or "").strip()
     if not question:
         return JSONResponse(status_code=400, content={"message": "question is required"})
-    if len(question) > 4000 or len(req.projectTitle) > 200:
+    if len(question) > 4000:
         return JSONResponse(status_code=400, content={
-            "message": "Use a question of at most 4000 characters and a project title of at most 200 characters."
+            "message": "Use a question of at most 4000 characters."
         })
     try:
-        await guardrails.check_input(question, req.projectTitle)
-        result = await run_in_threadpool(agent.investigate, question)
-        response = to_ui_shape(result, question, req.projectTitle)
+        await guardrails.check_input(question)
+        result = agent.investigate(question)
+        response = to_ui_shape(result, question)
         await guardrails.check_output(result, response)
         return response
     except GuardrailBlocked as error:

@@ -70,17 +70,36 @@ If uncertain whether content is safe, set allowed to false.
 
 
 class GuardrailBlocked(Exception):
+    """Raised when the safety policy rejects the content.
+
+    `stage` is "input" (the user's question) or "output" (the agent's answer).
+    The API returns HTTP 403 for this error.
+    """
+
     def __init__(self, stage: str):
+        """Store which stage blocked the content."""
         self.stage = stage
         super().__init__(f"{stage} blocked by guardrails")
 
 
 class GuardrailUnavailable(Exception):
-    pass
+    """Raised when the safety check could not produce a verdict.
+
+    Covers classifier errors, timeouts, invalid verdicts, and rails that did not
+    run. The API returns HTTP 503 and never falls back to unchecked content.
+    """
 
 
 class GuardrailsService:
+    """Runs DataPulse's NeMo input and output rails, backed by a Gemini classifier."""
+
     def __init__(self, client):
+        """Load the NeMo rails config and register the custom check actions.
+
+        `client` is the shared google-genai client used for classification. The
+        classifier model comes from GUARDRAILS_MODEL. The registered action names
+        must match the `execute` calls in guardrails/rails.co.
+        """
         self.client = client
         self.model = os.getenv("GUARDRAILS_MODEL", "gemini-3.5-flash-lite")
         config_path = Path(__file__).resolve().parents[1] / "guardrails"
@@ -89,6 +108,12 @@ class GuardrailsService:
         self.rails.register_action(self._check_output, name="datapulse_check_output")
 
     def _contains_secret(self, content: str) -> bool:
+        """Return True if the content contains a credential.
+
+        Checks generic credential patterns (SECRET_PATTERN) and the app's own
+        GEMINI_API_KEY and DATABRICKS_TOKEN values, including their JSON-escaped
+        forms. This runs locally, before any content is sent to the classifier.
+        """
         if SECRET_PATTERN.search(content):
             return True
         # Never send known application secrets to the classifier.
@@ -99,6 +124,14 @@ class GuardrailsService:
         )
 
     async def _classify(self, stage: str, content: str) -> bool:
+        """Ask Gemini whether the content is allowed under POLICY.
+
+        Returns False without calling Gemini if the content is over the stage's
+        size limit or contains a secret. Otherwise sends the content with
+        temperature 0 and a JSON schema that forces an {"allowed": bool} answer.
+        Raises GuardrailUnavailable if the verdict is not a valid boolean; Gemini
+        errors and timeouts propagate to the caller.
+        """
         limit = MAX_INPUT_CHARACTERS if stage == "input" else MAX_OUTPUT_CHARACTERS
         if len(content) > limit or self._contains_secret(content):
             return False
@@ -126,13 +159,21 @@ class GuardrailsService:
 
     @action(is_system_action=True)
     async def _check_input(self, context: dict):
+        """NeMo action for the input rail; classifies the user message."""
         return await self._policy_result("input", context["user_message"])
 
     @action(is_system_action=True)
     async def _check_output(self, context: dict):
+        """NeMo action for the output rail; classifies the bot message."""
         return await self._policy_result("output", context["bot_message"])
 
     async def _policy_result(self, stage: str, content: str):
+        """Run the classifier and wrap its verdict for NeMo.
+
+        The return value drives `if not $allowed` in rails.co. The context
+        updates set datapulse_<stage>_allowed or datapulse_<stage>_unavailable,
+        which _check reads to tell a policy block from a classifier failure.
+        """
         try:
             allowed = await self._classify(stage, content)
         except Exception as error:
@@ -146,6 +187,13 @@ class GuardrailsService:
         )
 
     async def _check(self, stage: str, content: str):
+        """Run one NeMo rail ("input" or "output") and enforce its result.
+
+        Returns normally only when the rail ran and explicitly allowed the
+        content. When allowed, NeMo passes the message through unchanged, so any
+        other response is treated as a failure. Raises GuardrailBlocked on a
+        policy block and GuardrailUnavailable on any other problem.
+        """
         messages = [{"role": "user", "content": content if stage == "input" else ""}]
         if stage == "output":
             messages.append({"role": "assistant", "content": content})
@@ -155,9 +203,8 @@ class GuardrailsService:
                     messages=messages,
                     options={"rails": [stage], "output_vars": True},
                 ),
-                timeout=CHECK_TIMEOUT_SECONDS + 5,
+                timeout=CHECK_TIMEOUT_SECONDS,
             )
-         
             flags = result.output_data or {}
             if flags.get(f"datapulse_{stage}_unavailable"):
                 raise GuardrailUnavailable("Safety classifier unavailable")
@@ -176,12 +223,18 @@ class GuardrailsService:
             logger.error("DataPulse %s guardrail unavailable (%s)", stage, type(error).__name__)
             raise GuardrailUnavailable("Safety checks unavailable") from None
 
-    async def check_input(self, question: str, project_title: str):
+    async def check_input(self, question: str):
+        """Check the user's question before the agent runs."""
         await self._check("input", json.dumps({
-            "question": question, "projectTitle": project_title
+            "question": question
         }, ensure_ascii=False))
 
     async def check_output(self, result: dict, response: dict):
+        """Check the agent's result before it is returned to the user.
+
+        Checks both the raw agent result (including executed-query detail) and
+        the UI response built from it.
+        """
         await self._check("output", json.dumps({
             "agentResult": result, "response": response
         }, ensure_ascii=False))

@@ -224,8 +224,8 @@ before returning its result. Policies are configured in
   Requests to describe it or reveal its details (contact or address data, order
   contents, amounts, payment methods) are blocked, including when combined with
   a tracking request. Output checks block those record details as well.
-- Both the question and project title are checked. Questions are limited to
-  4000 characters and project titles to 200 characters.
+- The question is checked and limited to 4000 characters. Any `projectTitle`
+  sent by a client is ignored; it is not passed to the agent or the guardrails.
 - Output checks the complete agent result (including query detail) and the
   mapped UI response. Allowed JSON is returned unchanged.
 - Credential patterns and known application secret values are checked locally
