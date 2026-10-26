@@ -68,63 +68,11 @@ SELECT
   (SELECT COUNT(*) FROM test_catalog.default.product_performance WHERE product_id = <ID>) AS gold;
 ```
 
-## Demo 4 — Top customers (general analytics)
-
-**Prompt:** `Who are the top 5 customers by lifetime value?`
-
-**Validate:**
-```sql
-SELECT customer_id, customer_name, total_spent, total_orders
-FROM test_catalog.default.customer_lifetime_value
-ORDER BY total_spent DESC
-LIMIT 5;
-```
-
-## Demo 5 — Layer counts and drop-off
-
-**Prompt:** `How many orders are in Bronze versus Silver, and what percentage is filtered between them?`
-
-**Validate:**
-```sql
-SELECT
-  (SELECT COUNT(*) FROM test_catalog.default.raw_orders)   AS bronze_orders,
-  (SELECT COUNT(*) FROM test_catalog.default.clean_orders) AS silver_orders,
-  ROUND((1 - (SELECT COUNT(*) FROM test_catalog.default.clean_orders)
-            / (SELECT COUNT(*) FROM test_catalog.default.raw_orders)) * 100, 1) AS pct_filtered;
-```
-
-## Demo 6 — Why orders are missing from revenue
-
-**Prompt:** `Why might some orders be missing from the daily revenue report?`
-
-**Validate (cancelled/returned are excluded from Gold):**
-```sql
-SELECT order_status, COUNT(*) AS orders
-FROM test_catalog.default.clean_orders
-GROUP BY order_status
-ORDER BY orders DESC;
-```
-
 ---
 
 ## Clean examples (one question, one validation query)
 
-### Example 1 — Gold layer query
-
-Ask the agent:
-```
-Who are the top 5 customers by total spending?
-```
-
-Validate in Databricks:
-```sql
-SELECT customer_name, total_spent, total_orders, avg_order_value
-FROM test_catalog.default.customer_lifetime_value
-ORDER BY total_spent DESC LIMIT 5;
-```
-Names and numbers should match.
-
-### Example 2 — Missing data investigation
+### Example 1 — Missing data investigation
 
 First, run this in Databricks to pick a real orphan order:
 ```sql
@@ -147,19 +95,3 @@ UNION ALL
 SELECT 'clean_orders', COUNT(*) FROM test_catalog.default.clean_orders WHERE order_id = {order_id};
 ```
 Result: raw_orders = 1, raw_customers = 0, clean_orders = 0. The customer doesn't exist, so the INNER JOIN dropped it — matches the agent's explanation.
-
-### Example 3 — Cross-layer comparison
-
-Ask the agent:
-```
-How many orders exist in each layer — bronze, silver, and gold — and what percentage gets filtered at each step?
-```
-
-Validate in Databricks (single query):
-```sql
-SELECT 'bronze' AS layer, COUNT(*) AS rows FROM test_catalog.default.raw_orders
-UNION ALL
-SELECT 'silver', COUNT(*) FROM test_catalog.default.clean_orders
-UNION ALL
-SELECT 'gold', SUM(total_orders) FROM test_catalog.default.daily_revenue;
-```

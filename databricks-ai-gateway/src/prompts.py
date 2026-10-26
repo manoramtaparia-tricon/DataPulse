@@ -13,8 +13,7 @@ Placeholders used:
   {entity_label}      - human label, e.g. "Customer 42" (lineage)
   {overall}           - overall lineage status (COMPLETE/STUCK/MISSING/PARTIAL)
   {trace}             - layer-by-layer trace lines (lineage)
-  {results_so_far}    - executed query results so far (general follow-up)
-  {all_results_text}  - all executed query results (general analysis)
+  {steps_so_far}      - layers already checked this trace, with results (lineage step)
 """
 
 CLASSIFY = """You route questions about an e-commerce Databricks platform (Medallion: Bronze -> Silver -> Gold).
@@ -38,25 +37,34 @@ Return ONLY a JSON object (no prose, no code fence):
   "entity_label": "<short human label, e.g. 'Customer 42', or null>"}}"""
 
 
-PLAN_LINEAGE = """You build a lineage trace plan for a single entity across the Medallion layers.
+LINEAGE_STEP = """You trace a single entity through the Medallion layers (Bronze -> Silver -> Gold), ONE layer at a time. You decide the next step; a separate program runs the SQL you return and calls you again with the result.
 
-PROJECT DOCUMENTATION (see the "Table & Column Reference", "Entity Lineage & Tracking" and "Join Keys" sections for table names, columns, data types, keys and audit timestamp columns):
+PROJECT DOCUMENTATION (see "Entity Lineage & Tracking" for the table, key column and audit timestamp per layer, and follow the "Lineage tracing procedure" there — it defines the order to check layers in and exactly when to stop):
 {readme}
 
 ENTITY TYPE: {entity_type}
 ENTITY VALUE: {entity_value}
 (ids in this platform are integers — do NOT quote them; only quote when matching a text column such as a name)
 
-List the tables this entity passes through, ordered Bronze -> Silver -> Gold, skipping any table that does not contain this entity. For each, produce a presence check.
+LAYERS ALREADY CHECKED THIS TRACE (in order):
+{steps_so_far}
 
-Return ONLY a JSON array (no prose, no code fence); each element:
-{{"stage": "Bronze" | "Silver" | "Gold",
+Following the lineage tracing procedure in the documentation, decide the SINGLE next action:
+- If a next layer should still be checked, return its presence-check query.
+- If the entity was not found (count = 0) in the most recent layer checked, or the final (Gold) layer has already been checked, stop.
+
+Return ONLY one JSON object (no prose, no code fence).
+To check the next layer:
+{{"action": "query",
+  "stage": "Bronze" | "Silver" | "Gold",
   "layer": "Bronze" | "Silver" | "Gold",
   "table": "<fully-qualified table name>",
   "detail": "<short description of what this table holds>",
   "sql": "SELECT COUNT(*) AS n, MAX(<audit timestamp column>) AS last_seen FROM <table> WHERE <key column> = {entity_value}"}}
+To stop:
+{{"action": "stop", "reason": "<why you are stopping>"}}
 
-Use the correct key column (customer_id / order_id / product_id, or a name column if the value is a name) and the correct audit column from the documentation above (ingested_at for Bronze, processed_at for Silver, aggregated_at for Gold). SELECT only."""
+Use the correct key column (customer_id / order_id / product_id, or a name column if the value is a name) and the correct audit column (ingested_at for Bronze, processed_at for Silver, aggregated_at for Gold). SELECT only."""
 
 
 EXPLAIN_LINEAGE = """You explain data lineage results to a business user.
@@ -79,55 +87,3 @@ Write 1-3 sentences for a business user:
 - STUCK / PARTIAL: name the exact transformation step or filter in the pipeline code that most likely dropped it (e.g. the INNER JOIN to customers/products, the quantity/region/date validation, the duplicate dedup, or the cancelled/returned filter) and why.
 - MISSING: say it was never found in any layer.
 Be specific and concise. Plain text only, no markdown."""
-
-
-GENERAL_PLAN = """You are a data engineer investigating a question about an e-commerce data platform built on Databricks using the Medallion Architecture.
-
-PROJECT DOCUMENTATION (includes the full Table & Column Reference — all tables, columns, data types and keys):
-{readme}
-
-PIPELINE CODE (this is the actual code that builds Silver and Gold tables — use it to understand the exact transformations):
-{pipeline_code}
-
-USER QUESTION: "{question}"
-
-Generate 2-4 SQL queries (Spark SQL syntax, SELECT only) to answer this question.
-Think about which layer (Bronze, Silver, Gold) has the relevant data.
-If the question is about a metric, trace it back through the layers.
-Add a one-line comment at the top of each query explaining what it checks.
-
-Return ONLY the SQL queries, each in a separate ```sql``` code block."""
-
-
-GENERAL_FOLLOWUP = """You are investigating this question: "{question}"
-
-Results so far:
-{results_so_far}
-
-Do you need any follow-up queries to fully answer the question?
-If YES, generate 1-2 additional SQL queries in ```sql``` code blocks.
-If NO, respond with exactly: NO_FOLLOWUP_NEEDED"""
-
-
-GENERAL_ANALYSIS = """You are a data engineer explaining query results to a business user.
-
-PROJECT DOCUMENTATION:
-{readme}
-
-PIPELINE CODE (actual transformation logic):
-{pipeline_code}
-
-USER QUESTION: "{question}"
-
-INVESTIGATION RESULTS:
-{all_results_text}
-
-Based on the actual query results:
-1. Answer the user's question clearly and concisely
-2. Reference specific data from the results (numbers, names, dates)
-3. If the question involves tracing data lineage, explain which tables and transformations are involved
-4. If data is missing, explain which transformation step likely filtered it out and why
-
-Keep your answer focused and practical. Use the documentation to explain the architecture but rely on the actual query results for the data.
-
-Write in plain text only — no Markdown. Do not use asterisks for bold, hash symbols for headings, or backticks. Use short paragraphs and, where you list items, plain numbered lines (e.g. "1. ...")."""

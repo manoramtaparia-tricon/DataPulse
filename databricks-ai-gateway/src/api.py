@@ -61,16 +61,17 @@ def to_ui_shape(result, question, project_title):
             "actions": obj.get("actions", []),
         }
 
-    answer = result.get("text") or (data.get("answer", "") if isinstance(data, dict) else "")
+    # Any non-lineage question is declined — this agent only traces entity lineage.
+    message = result.get("text") or ""
     return {
-        "title": "Analysis",
+        "title": "Unsupported question",
         "entityType": None,
         "entityId": None,
         "customerId": None,
         "projectTitle": project_title,
         "question": question,
         "timeline": [],
-        "summary": {"status": "ANSWER", "message": answer},
+        "summary": {"status": "UNSUPPORTED", "message": message},
         "actions": [],
     }
 

@@ -17,9 +17,16 @@ from google import genai
 from src.db_connection import run_query
 from src import prompts
 
-SCHEMA = "test_catalog.default"
 MAX_RESULT_ROWS = 50
-MAX_QUERY_ROUNDS = 3
+MAX_LINEAGE_STEPS = 6  # runaway guard; when to stop is decided by the model, not here
+
+# Decline text for non-lineage questions (this agent is lineage-only).
+UNSUPPORTED_MESSAGE = (
+    "This agent only answers data lineage questions — tracing whether a specific "
+    "customer, order, or product flows through the Bronze, Silver, and Gold layers. "
+    'Try a question like "Is customer 42 present in all layers?" or '
+    '"Where did order 1234 get stuck?"'
+)
 
 TONE_SUCCESS = "success"
 TONE_WARNING = "warning"
@@ -46,17 +53,6 @@ class Agent:
         path = os.path.join(self.project_root, relative_path)
         with open(path) as f:
             return f.read()
-
-    def _extract_sql(self, text):
-        queries = re.findall(r"```sql\s*(.*?)```", text, re.DOTALL | re.IGNORECASE)
-        if not queries:
-            queries = re.findall(r"```\s*(SELECT.*?)```", text, re.DOTALL | re.IGNORECASE)
-        result = []
-        for q in queries:
-            q = q.strip().rstrip(";")
-            if q:
-                result.append(q)
-        return result
 
     def _extract_json(self, text):
         """Pull the first JSON object/array out of a model response."""
@@ -108,15 +104,6 @@ class Agent:
         except Exception as e:
             return None, None, f"ERROR: {e}"
 
-    def _format_results(self, columns, rows):
-        if not columns or not rows:
-            return "(no results)"
-        header = " | ".join(f"{col:>20}" for col in columns)
-        lines = [header, "-" * len(header)]
-        for row in rows:
-            lines.append(" | ".join(f"{str(v):>20}" for v in row))
-        return "\n".join(lines)
-
     def _call_gemini(self, prompt):
         response = self.client.models.generate_content(
             model="gemini-3.5-flash-lite",
@@ -128,7 +115,11 @@ class Agent:
         classification = self._classify(question) or {}
         if classification.get("mode") == "lineage" and classification.get("entity_value") not in (None, ""):
             return self._investigate_lineage(question, classification)
-        return self._investigate_general(question)
+        return self._unsupported()
+
+    def _unsupported(self):
+        """Return a decline response for any question that is not entity lineage."""
+        return {"mode": "unsupported", "data": None, "text": UNSUPPORTED_MESSAGE, "detail": ""}
 
     def _classify(self, question):
         prompt = prompts.CLASSIFY.format(readme=self.readme, question=question)
@@ -140,42 +131,20 @@ class Agent:
         entity_label = info.get("entity_label") or f"{entity_type or 'entity'} {entity_value}"
 
         print(f"  Tracing {entity_label} across layers...")
-        stages = self._plan_lineage(entity_type, entity_value)
-        if not stages:
-            print("  Could not plan a lineage trace — falling back to general analysis.\n")
-            return self._investigate_general(question)
 
-        layer_rank = {"Bronze": 0, "Silver": 1, "Gold": 2}
-        stages.sort(key=lambda s: layer_rank.get(s.get("layer"), 99))
-
+        # Model picks the next layer to check or stops; we just run its SQL and feed results back.
+        stages = []
         executed = []
-        blocked = False
-        current_layer = None
-        layer_found = False      # entity seen in any table of the current layer
-        layer_ok = True          # every check in the current layer ran without error
-        for stage in stages:
-            layer = stage.get("layer")
-            if layer != current_layer:
-                if current_layer is not None and layer_ok and not layer_found:
-                    blocked = True  # previous layer was entirely empty
-                current_layer = layer
-                layer_found = False
-                layer_ok = True
+        for _ in range(MAX_LINEAGE_STEPS):
+            decision = self._next_lineage_step(entity_type, entity_value, stages)
+            if not isinstance(decision, dict) or decision.get("action") != "query":
+                break
+            sql = (decision.get("sql") or "").strip().rstrip(";")
+            valid, _ = self._validate_sql(sql)
+            if not valid:
+                break
 
-            if blocked:
-                stage["count"] = 0
-                stage["last_seen"] = None
-                stage["error"] = None
-                stage["skipped"] = True
-                print(f"  Skipping {stage.get('stage')} ({stage.get('table')}) — upstream layer empty")
-                executed.append(
-                    f"--- {stage.get('stage')} ({stage.get('table')}) ---\n"
-                    f"SKIPPED: an upstream layer was empty, so this cannot contain the entity"
-                )
-                continue
-
-            sql = stage["sql"]
-            print(f"  Checking {stage.get('stage')} ({stage.get('table')})...")
+            print(f"  Checking {decision.get('stage')} ({decision.get('table')})...")
             columns, rows, status = self._run_sql(sql)
             count, last_seen = None, None
             if rows:
@@ -185,17 +154,24 @@ class Agent:
                     count = None
                 if len(rows[0]) > 1 and rows[0][1] is not None:
                     last_seen = str(rows[0][1])
-            stage["count"] = count
-            stage["last_seen"] = last_seen
-            stage["error"] = None if count is not None else status
-            if count is None:
-                layer_ok = False
-            elif count > 0:
-                layer_found = True
+            stages.append({
+                "stage": decision.get("stage"),
+                "layer": decision.get("layer"),
+                "table": decision.get("table"),
+                "detail": decision.get("detail"),
+                "sql": sql,
+                "count": count,
+                "last_seen": last_seen,
+                "error": None if count is not None else status,
+            })
             executed.append(
-                f"--- {stage.get('stage')} ({stage.get('table')}) ---\n"
+                f"--- {decision.get('stage')} ({decision.get('table')}) ---\n"
                 f"SQL: {sql}\nRESULT: count={count}, last_seen={last_seen} {status}"
             )
+
+        if not stages:
+            print("  Could not trace this entity.\n")
+            return self._unsupported()
 
         timeline, overall = self._build_timeline(stages)
         message = self._explain_lineage(question, entity_label, timeline, overall)
@@ -218,30 +194,25 @@ class Agent:
         detail = f"\n--- QUERIES EXECUTED ---\n\n" + "\n\n".join(executed)
         return {"mode": "lineage", "data": data, "text": message, "detail": detail}
 
-    def _plan_lineage(self, entity_type, entity_value):
-        prompt = prompts.PLAN_LINEAGE.format(
-            readme=self.readme, entity_type=entity_type, entity_value=entity_value
+    def _next_lineage_step(self, entity_type, entity_value, stages):
+        """Ask the model for the next trace action: {"action": "query"...} or {"action": "stop"}."""
+        if stages:
+            steps_so_far = "\n".join(
+                f"- {s['stage']} ({s['table']}): count={s['count']}, last_seen={s['last_seen']}"
+                for s in stages
+            )
+        else:
+            steps_so_far = "(none yet — start with the first layer)"
+        prompt = prompts.LINEAGE_STEP.format(
+            readme=self.readme,
+            entity_type=entity_type,
+            entity_value=entity_value,
+            steps_so_far=steps_so_far,
         )
-        plan = self._extract_json(self._call_gemini(prompt))
-        if not isinstance(plan, list):
-            return []
-        stages = []
-        for item in plan:
-            if not isinstance(item, dict):
-                continue
-            sql = (item.get("sql") or "").strip().rstrip(";")
-            valid, _ = self._validate_sql(sql)
-            if sql and valid:
-                item["sql"] = sql
-                stages.append(item)
-        return stages
+        return self._extract_json(self._call_gemini(prompt))
 
     def _build_timeline(self, stages):
-        # A stage is "Stuck" when it is the first absent layer after the entity was
-        # present earlier; any later absent layers are "Not found".
-        # Skipped stages (downstream of an empty layer, never queried) are left out
-        # of the timeline entirely — the trace ends where the trail went cold.
-        stages = [s for s in stages if not s.get("skipped")]
+        # Label each checked layer: Found, Stuck (first gap after a hit), Not found, or Error.
         timeline = []
         seen_present = False
         stuck_marked = False
@@ -312,74 +283,6 @@ class Agent:
         print(f"  {obj['summary']['message']}")
         print(f"\n{'=' * 60}")
 
-    def _investigate_general(self, question):
-        all_query_results = []
-
-        # Round 1: Generate initial investigation queries
-        plan_prompt = prompts.GENERAL_PLAN.format(
-            readme=self.readme, pipeline_code=self.pipeline_code, question=question
-        )
-
-        print("  Generating investigation queries...")
-        plan_text = self._call_gemini(plan_prompt)
-        queries = self._extract_sql(plan_text)
-
-        if not queries:
-            text = f"Could not generate queries.\n\nGemini response:\n{plan_text}"
-            print(text)
-            return {"mode": "general", "data": None, "text": text, "detail": ""}
-
-        # Execute queries
-        for i, query in enumerate(queries, 1):
-            print(f"  Running query {i}/{len(queries)}...")
-            columns, rows, status = self._run_sql(query)
-            result_text = self._format_results(columns, rows) if columns else status
-            all_query_results.append(f"--- Query {i} ---\nSQL: {query}\n\n{result_text}\n{status}")
-
-        # Check if we need follow-up queries (multi-step reasoning)
-        for round_num in range(2, MAX_QUERY_ROUNDS + 1):
-            results_so_far = "\n\n".join(all_query_results)
-            followup_prompt = prompts.GENERAL_FOLLOWUP.format(
-                question=question, results_so_far=results_so_far
-            )
-
-            followup_text = self._call_gemini(followup_prompt)
-            if "NO_FOLLOWUP_NEEDED" in followup_text:
-                break
-
-            followup_queries = self._extract_sql(followup_text)
-            if not followup_queries:
-                break
-
-            print(f"  Running {len(followup_queries)} follow-up queries (round {round_num})...")
-            for j, query in enumerate(followup_queries, 1):
-                idx = len(all_query_results) + 1
-                columns, rows, status = self._run_sql(query)
-                result_text = self._format_results(columns, rows) if columns else status
-                all_query_results.append(f"--- Query {idx} ---\nSQL: {query}\n\n{result_text}\n{status}")
-
-        # Final analysis
-        all_results_text = "\n\n".join(all_query_results)
-        analysis_prompt = prompts.GENERAL_ANALYSIS.format(
-            readme=self.readme,
-            pipeline_code=self.pipeline_code,
-            question=question,
-            all_results_text=all_results_text,
-        )
-
-        print("  Analyzing results...\n")
-        analysis = self._call_gemini(analysis_prompt)
-
-        print(f"\n{'=' * 60}")
-        print("  ANSWER")
-        print(f"{'=' * 60}\n")
-        print(analysis)
-        print(f"\n{'=' * 60}")
-
-        detail = f"\n--- QUERIES EXECUTED ---\n\n{all_results_text}"
-        data = {"question": question, "answer": analysis}
-        return {"mode": "general", "data": data, "text": analysis, "detail": detail}
-
 
 def main():
     print("=" * 60)
@@ -390,13 +293,11 @@ def main():
 
     agent = Agent()
 
-    print("Ask questions about the data (type 'quit' to exit)")
+    print("Ask a lineage question about a specific entity (type 'quit' to exit)")
     print("Examples:")
-    print('  Lineage:  "Is customer 42 present in all layers?"')
-    print('  Lineage:  "Where did order 1234 get stuck?"')
-    print('  General:  "What is the total revenue for January 2024?"')
-    print('  General:  "Who are the top 5 customers by lifetime value?"')
-    print('  General:  "Where does the daily_revenue metric come from?"')
+    print('  "Is customer 42 present in all layers?"')
+    print('  "Where did order 1234 get stuck?"')
+    print('  "Trace product 7 across Bronze, Silver, and Gold"')
     print()
 
     while True:
@@ -415,10 +316,7 @@ def main():
             if input("Show executed queries? (y/n): ").strip().lower() == "y":
                 print(result["detail"])
         else:
-            if input("\nShow response as JSON? (y/n): ").strip().lower() == "y":
-                print(json.dumps(result["data"], indent=2, default=str, ensure_ascii=False))
-            if input("Show query details? (y/n): ").strip().lower() == "y":
-                print(result["detail"])
+            print(f"\n{result['text']}")
 
 
 if __name__ == "__main__":

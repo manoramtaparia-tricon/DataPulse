@@ -4,12 +4,12 @@
 
 This project builds an end-to-end data engineering platform for an e-commerce business using Databricks. It processes raw transactional data through a **Medallion Architecture** (Bronze → Silver → Gold) to produce business-ready analytics.
 
-An **AI agent** powered by Google Gemini understands the system by reading this documentation and the pipeline code. It can answer natural language questions about the data by querying the Databricks tables directly.
+An **AI agent** powered by Google Gemini understands the system by reading this documentation and the pipeline code. **This project is scoped to data lineage tracking only:** the agent answers questions about whether a specific entity (a customer, order, or product) flows through the Bronze, Silver, and Gold layers, and where it was dropped. It queries the Databricks tables directly to trace the entity and declines general analytics questions (totals, top-N, trends).
 
 ### Business Problem
 
 The e-commerce business needs a unified data platform that:
-- Ingests raw data from multiple source systems (web app, mobile app, POS terminals, partner APIs)
+- Ingests raw transactional data (orders, customers, products) into a raw landing zone
 - Cleans and enriches the data into a reliable, queryable format
 - Produces aggregated business metrics for revenue tracking, customer analytics, and product performance
 - Allows non-technical stakeholders to ask questions about the data in plain English
@@ -26,13 +26,6 @@ The e-commerce business needs a unified data platform that:
 
 ```mermaid
 graph LR
-    subgraph Sources
-        S1[Web App]
-        S2[Mobile App]
-        S3[POS Terminal]
-        S4[Partner API]
-    end
-
     subgraph Bronze Layer
         B1[raw_orders]
         B2[raw_customers]
@@ -53,7 +46,6 @@ graph LR
         AG[Gemini Agent]
     end
 
-    S1 & S2 & S3 & S4 --> B1 & B2 & B3
     B1 & B2 & B3 --> SV
     SV --> G1 & G2 & G3
     AG -.->|queries| B1 & B2 & B3
@@ -68,9 +60,9 @@ graph LR
 ```mermaid
 flowchart TD
     subgraph Bronze["Bronze — Raw Ingestion"]
-        RO[raw_orders<br/>Orders as received from source systems]
-        RC[raw_customers<br/>Customer records from source systems]
-        RP[raw_products<br/>Product catalog from source systems]
+        RO[raw_orders<br/>Raw order transactions as ingested]
+        RC[raw_customers<br/>Raw customer records as ingested]
+        RP[raw_products<br/>Raw product catalog as ingested]
     end
 
     subgraph Silver["Silver — Cleaned & Enriched"]
@@ -312,6 +304,26 @@ Each business entity flows through a specific set of tables. To check whether an
 
 An entity is "Found" at a layer if at least one matching row exists. If it exists in an earlier layer but not a later one, it was dropped ("Stuck") by a transformation between them.
 
+### Lineage tracing procedure
+
+Trace an entity one layer at a time, in Medallion order (Bronze → Silver → Gold). Check a single layer, read its result, then decide the next step:
+
+1. Start at the entity's Bronze source table and run a presence check (count of matching rows, plus the latest audit timestamp).
+2. After each layer's result, decide whether to continue:
+   - If the entity was **not** found in the layer just checked (count = 0), **stop** — do not check any later layer. Later layers are derived from this one, so the entity cannot appear downstream.
+   - If the entity **was** found, continue to the next layer in order.
+3. Stop once the Gold layer has been checked, or as soon as a layer returns no match — whichever comes first.
+
+Only the layers actually checked are reported; the trace ends at the first layer where the entity is absent.
+
+### Interpreting presence across layers
+
+State the conclusion based on where the entity appears, in Bronze → Silver → Gold order:
+
+- Found in Bronze means it exists — never report "not found"/"missing" just because it is absent from Silver or Gold.
+- Present earlier but absent later means it was dropped by a transformation: name the first layer where it disappears and the responsible filter/join from "Where records get dropped".
+- It is genuinely absent only when it is missing from its Bronze source table.
+
 ### Where records get dropped (Bronze → Silver → Gold)
 
 These filters in `scripts/build_pipeline.py` explain why an entity may be present in Bronze but missing downstream:
@@ -360,15 +372,11 @@ Used to report when an entity was last seen at each layer:
 
 The AI agent reads this documentation and the pipeline code (`scripts/build_pipeline.py`) to understand the system. It gets all table and column metadata (names, data types, keys, relationships) from this document, not by running `SHOW TABLES` or `DESCRIBE TABLE`; it only runs `SELECT` queries to read actual data when answering a question.
 
-It routes each question into one of two modes:
-
-**Lineage mode** — when you ask whether a specific entity flows through the layers (e.g. *"is customer 42 present in all layers?"*, *"where did order 1234 get stuck?"*):
+The agent answers **lineage questions only** — questions about whether a specific entity (a particular customer, order, or product, named by its id) flows through the layers (e.g. *"is customer 42 present in all layers?"*, *"where did order 1234 get stuck?"*). For each such question it:
 
 1. Identifies the entity (type + id)
 2. Checks for its presence at each layer (Bronze → Silver → Gold) using the Entity Lineage map above
 3. Builds a layer-by-layer timeline (Found / Stuck / Not found) and, if the entity was dropped, names the transformation step responsible
 4. Returns a structured JSON object (timeline, summary, actions) and prints a tick-by-tick view in the terminal
 
-**General mode** — for any other analytics question: it generates SQL, executes it, optionally runs follow-up queries, and explains the results in plain English.
-
-The agent restricts itself to SELECT queries only.
+Any question that is not about a specific entity's lineage (for example general analytics such as totals, top-N, or trends) is declined with a short message directing the user to ask a lineage question. The agent restricts itself to SELECT queries only.
