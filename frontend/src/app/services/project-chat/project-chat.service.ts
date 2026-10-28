@@ -1,4 +1,5 @@
 import { Injectable } from '@angular/core';
+import { environment } from '../../../environments/environment';
 
 export interface ChatProjectSummary {
   id: string;
@@ -37,7 +38,7 @@ export interface TrackingResponse {
   providedIn: 'root'
 })
 export class ProjectChatService {
-  private readonly apiBaseUrl = 'http://localhost:3001';
+  private readonly apiBaseUrl = environment.apiUrl;
 
   private readonly projects: Record<string, ChatProjectSummary> = {
     'customer-data-platform': {
