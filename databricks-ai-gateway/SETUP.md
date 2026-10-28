@@ -160,6 +160,20 @@ Bronze → Silver drop-off: ~12% filtered
 
 ## Step 7: Run the AI Agent
 
+For the DataPulse frontend, start the HTTP API from this folder:
+
+```powershell
+python -m uvicorn src.api:app --host 127.0.0.1 --port 8001
+```
+
+The frontend connects to `http://localhost:8001`. Verify startup with
+`Invoke-RestMethod http://127.0.0.1:8001/health`; it should return `status: ok`.
+Port 8001 avoids the existing service using port 8000. If you change the port,
+also update `apiBaseUrl` in
+[`project-chat.service.ts`](../frontend/src/app/services/project-chat/project-chat.service.ts).
+
+For the standalone interactive CLI instead:
+
 ```bash
 python src/agent.py
 ```
@@ -193,6 +207,70 @@ Are there any orders in Bronze that reference products not in the product catalo
 ```
 
 Type `quit` to exit.
+
+## NeMo Input and Output Guardrails (HTTP API)
+
+`POST /api/diagnose` runs NeMo Guardrails before calling the agent and again
+before returning its result. Policies are configured in
+[`guardrails/config.yml`](guardrails/config.yml) and
+[`guardrails/rails.co`](guardrails/rails.co); the Gemini classifier policy is in
+[`src/guardrails_service.py`](src/guardrails_service.py).
+
+- Input allows read-only data-platform, lineage, data-quality, and platform
+  analytics questions. It blocks unrelated requests, harmful instructions,
+  prompt injection, credential disclosure, and data modification requests.
+- For a specific customer, order, or product, only pipeline tracking is allowed
+  (which layers it reached, where it got stuck, and why it was dropped).
+  Requests to describe it or reveal its details (contact or address data, order
+  contents, amounts, payment methods) are blocked, including when combined with
+  a tracking request. Output checks block those record details as well.
+- The question is checked and limited to 4000 characters. Any `projectTitle`
+  sent by a client is ignored; it is not passed to the agent or the guardrails.
+- Output checks the complete agent result (including query detail) and the
+  mapped UI response. Allowed JSON is returned unchanged.
+- Credential patterns and known application secret values are checked locally
+  before sending content to the classifier.
+- Policy denials return HTTP 403 with `GUARDRAIL_BLOCKED` and an `input`/`output`
+  stage. Safety-check outages or invalid verdicts return HTTP 503 with
+  `GUARDRAIL_UNAVAILABLE`. The frontend displays the safe error message.
+- Missing NeMo dependencies/configuration prevent startup. There is no
+  guardrails-off fallback. Output over 64000 serialized characters is blocked
+  rather than partially checked or truncated.
+
+Install the updated requirements in the same environment used to run Uvicorn,
+then restart the API. For the repository's Windows `.venv`, from this folder:
+
+```powershell
+..\.venv\Scripts\python.exe -m pip install -r requirements.txt
+..\.venv\Scripts\python.exe -m uvicorn src.api:app --host 127.0.0.1 --port 8001
+```
+
+Stop the existing DataPulse API instance before restarting on the same port.
+The frontend continues using port 8001.
+
+The custom NeMo actions use the existing `GEMINI_API_KEY`; no NVIDIA API key is
+required. `GUARDRAILS_MODEL` optionally selects the safety classifier model
+(default `gemini-3.5-flash-lite`, matching the agent). Each normal investigation
+adds one input and one output classifier call, each with a 30-second timeout.
+Prompts and complete results are sent to Gemini for classification, as they are
+for investigation; only use data permitted by your organization's provider policy.
+Guardrail diagnostics do not log rejected content or raw provider exception
+messages. The agent's existing console output is unchanged; restrict access to
+server logs, which can contain investigation results.
+
+These are probabilistic model-based checks, not an authorization boundary or
+a guarantee against every injection. Database permissions and the agent's
+read-only SQL validation still apply. These rails protect the HTTP chat
+endpoint, not direct calls to the standalone interactive agent CLI.
+
+Run tests without calling Gemini or Databricks:
+
+```powershell
+..\.venv\Scripts\python.exe -m unittest discover -s tests -v
+```
+
+The tests execute real NeMo flows with a controlled classifier, exercising
+input/output denials, credential checks, provider failures, and API behavior.
 
 ---
 
