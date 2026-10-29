@@ -122,7 +122,7 @@ async def diagnose(req: DiagnoseRequest):
         return JSONResponse(
             status_code=403,
             content={
-                "message": "I don't have permission to provide this content.",
+                "message": "I don't have context for this.This is a general user statement rather than an entity investigation or data query.",
                 "code": "GUARDRAIL_BLOCKED",
                 "stage": error.stage,
             },
