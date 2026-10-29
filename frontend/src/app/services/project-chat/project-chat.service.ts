@@ -8,7 +8,10 @@ export interface ChatProjectSummary {
 
 export interface TrackingTimelineItem {
   stage: string;
+  layer?: string;
+  table?: string;
   detail: string;
+  count?: number | null;
   status: string;
   timestamp: string;
   tone: 'success' | 'warning' | 'muted';
@@ -72,7 +75,11 @@ export class ProjectChatService {
     });
 
     if (!response.ok) {
-      throw new Error('Unable to fetch the pipeline diagnosis.');
+      const failure: unknown = await response.json();
+      const message = failure && typeof failure === 'object' && 'message' in failure
+        && typeof failure.message === 'string'
+        ? failure.message : 'Unable to fetch the pipeline diagnosis.';
+      throw new Error(message);
     }
 
     return response.json() as Promise<TrackingResponse>;

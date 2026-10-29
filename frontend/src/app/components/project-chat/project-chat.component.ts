@@ -37,6 +37,11 @@ export class ProjectChatComponent implements OnDestroy {
     this.question = (event.target as HTMLInputElement).value;
   }
 
+  // Show the table name
+  protected shortTable(table: string | undefined): string {
+    return table ? table.split('.').pop() ?? table : '';
+  }
+
   protected sendQuestion(): void {
     const trimmedQuestion = this.question.trim();
 
@@ -87,7 +92,7 @@ export class ProjectChatComponent implements OnDestroy {
           });
           this.loading = false;
         })
-        .catch(() => {
+        .catch((error: unknown) => {
           if (this.isDestroyed) {
             return;
           }
@@ -96,7 +101,8 @@ export class ProjectChatComponent implements OnDestroy {
           this.messages = this.messages.slice(0, -1).concat({
             sender: 'assistant',
             kind: 'text',
-            text: 'Unable to reach the diagnostic service right now. Please try again.'
+            text: error instanceof Error ? error.message
+              : 'Unable to reach the diagnostic service right now. Please try again.'
           });
           this.loading = false;
         });

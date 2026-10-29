@@ -1,3 +1,6 @@
 databricks-sql-connector[pyarrow]
 python-dotenv
 google-genai
+fastapi
+uvicorn[standard]
+nemoguardrails==0.24.1
