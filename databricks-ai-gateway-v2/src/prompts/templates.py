@@ -62,7 +62,12 @@ Return ONLY a JSON object (no prose, no code fence) with this shape:
   "status": "<ONE WORD describing the outcome, inferred from the findings and the
               documented data flow — e.g. COMPLETE / PARTIAL / STUCK / MISSING /
               ANSWERED / NOT_FOUND. Choose what best fits this question.>",
-  "summary": "<2-4 plain-English sentences answering the question for a business user>",
+  "summary": "<2-4 plain-English sentences answering the question for a business user.
+              When tracking a specific entity, identify it by its ID and describe only its
+              lineage through the pipeline — which layers it is present in, where it stopped
+              or was dropped, and why. Do not state the entity's own data values or any
+              figure derived from them (such as totals or amounts); presence, counts and
+              timestamps are enough.>",
   "entity": {{"type": "<e.g. customer/order/product, or null>", "id": "<id as given, or null>"}},
   "trace": [
     {{"layer": "<layer/stage name from the docs>",
@@ -81,4 +86,7 @@ Rules:
 - Build "trace" only from layers you actually have query results for, in flow order.
 - If the question is not an entity trace (e.g. a general flow question), set entity to
   {{"type": null, "id": null}} and put the answer in "summary"; "trace" may be [].
-- Never claim a layer was checked if there is no query result for it."""
+- Never claim a layer was checked if there is no query result for it.
+- When tracking a specific entity, identify it by its ID and report only its presence and
+  movement through the layers (found/stopped/dropped and why) — not the entity's own data
+  values or any figure derived from them."""
