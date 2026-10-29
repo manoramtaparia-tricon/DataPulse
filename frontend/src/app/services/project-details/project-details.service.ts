@@ -23,7 +23,7 @@ export class ProjectDetailsService {
       title: 'Customer Data Platform',
       description: 'End-to-end customer data pipeline from source to gold layer.',
       keyEntities: ['Customer (customer_id)', 'Account (account_id)', 'Order (order_id)'],
-      pipelineStages: ['Source', 'Bronze', 'Silver', 'Reconciliation', 'Gold']
+      pipelineStages: ['Bronze', 'Silver', 'Gold']
     },
     {
       id: 'sales-analytics',
