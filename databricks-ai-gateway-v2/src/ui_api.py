@@ -5,6 +5,7 @@ runs the agent and maps its generic output onto that UI contract. All the mappin
 here is *presentation only* — no investigation logic lives in this file.
 """
 
+import logging
 import os
 import sys
 
@@ -17,9 +18,12 @@ from pydantic import BaseModel
 
 try:
     from src.ai_agent import DataAgent
+    from src.guardrails_service import GuardrailBlocked, GuardrailUnavailable, GuardrailsService
 except ImportError:
     from ai_agent import DataAgent
+    from guardrails_service import GuardrailBlocked, GuardrailUnavailable, GuardrailsService
 
+logger = logging.getLogger(__name__)
 app = FastAPI(title="DataPulse Generic Agent API")
 
 app.add_middleware(
@@ -30,12 +34,14 @@ app.add_middleware(
 )
 
 agent = None
+guardrails = None
 
 
 @app.on_event("startup")
 def _startup():
-    global agent
+    global agent, guardrails
     agent = DataAgent()
+    guardrails = GuardrailsService(agent.client)
 
 
 class DiagnoseRequest(BaseModel):
@@ -98,15 +104,40 @@ def health():
 
 
 @app.post("/api/diagnose")
-def diagnose(req: DiagnoseRequest):
+async def diagnose(req: DiagnoseRequest):
     question = (req.question or "").strip()
     if not question:
         return JSONResponse(status_code=400, content={"message": "question is required"})
+    if len(question) > 4000:
+        return JSONResponse(status_code=400, content={"message": "question must be 4000 characters or fewer"})
     try:
+        if agent is None or guardrails is None:
+            raise GuardrailUnavailable("Safety checks unavailable")
+        await guardrails.check_input(question)
         result = agent.investigate(question)
-        return to_ui_shape(result, question)
-    except Exception as e:
+        response = to_ui_shape(result, question)
+        await guardrails.check_output(result, response)
+        return response
+    except GuardrailBlocked as error:
+        return JSONResponse(
+            status_code=403,
+            content={
+                "message": "I don't have permission to provide this content.",
+                "code": "GUARDRAIL_BLOCKED",
+                "stage": error.stage,
+            },
+        )
+    except GuardrailUnavailable:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "message": "Safety checks are temporarily unavailable. Please try again later.",
+                "code": "GUARDRAIL_UNAVAILABLE",
+            },
+        )
+    except Exception as error:
+        logger.error("DataPulse diagnosis failed (%s)", type(error).__name__)
         return JSONResponse(
             status_code=500,
-            content={"message": "Unable to generate the diagnosis response.", "error": str(e)},
+            content={"message": "Unable to generate the diagnosis response."},
         )

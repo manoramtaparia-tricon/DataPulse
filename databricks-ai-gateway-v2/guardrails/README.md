@@ -136,8 +136,21 @@ agent, so its normal API key configuration is also required.
   with the names registered in `GuardrailsService.__init__`.
 - If changing a limit, timeout, model default, or local credential check, edit
   the corresponding constant or logic in `guardrails_service.py`.
-- Keep the API's exception mapping in `src/api.py` consistent if adding a new
+- Keep the API's exception mapping in `src/ui_api.py` consistent if adding a new
   guardrail outcome.
 
 These checks supplement application authorization and data-access controls;
 they do not replace them.
+
+## Offline regression tests
+
+From the `databricks-ai-gateway-v2` directory, after installing requirements:
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+The tests cover API check ordering and error responses, plus the real NeMo flows
+with mocked Gemini verdicts. They do not call Gemini or Databricks and require
+no credentials. Guardrails protect the HTTP API; direct calls to `DataAgent`,
+including the command-line agent, do not run these checks.
