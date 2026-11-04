@@ -137,7 +137,7 @@ Raw customer master records. **Grain:** one row per customer.
 
 | Column | Type | Key | Description |
 |--------|------|-----|-------------|
-| `customer_id` | INT | PK | Customer identifier (1–200) |
+| `customer_id` | INT | PK | Customer identifier |
 | `first_name` | STRING | | Customer first name |
 | `last_name` | STRING | | Customer last name |
 | `email` | STRING | | Email address (may be NULL, ~5%) |
@@ -154,7 +154,7 @@ Raw product catalog. **Grain:** one row per product.
 
 | Column | Type | Key | Description |
 |--------|------|-----|-------------|
-| `product_id` | INT | PK | Product identifier (1–50) |
+| `product_id` | INT | PK | Product identifier |
 | `product_name` | STRING | | Product name |
 | `category` | STRING | | One of `Electronics`, `Clothing`, `Home & Kitchen`, `Sports`, `Books`, `Beauty` |
 | `brand` | STRING | | Brand name |
