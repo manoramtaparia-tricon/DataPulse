@@ -143,6 +143,78 @@ ui_api.to_ui_shape()
 
 ---
 
+## Root Cause Analysis (RCA)
+
+After a tracking answer, the UI offers **Run RCA Analysis**, but only when the tracking
+verdict is **MISSING** (absent from the first layer checked) or **STUCK** (present in an
+earlier layer, absent from a later one). Fully-found entities, generic/off-topic
+(guardrail) answers, and errors never get the button.
+
+The decision is deterministic. `rca_eligibility()` in `ai_agent.py` reads the `trace[]`
+(ground truth from the queries) and does not rely on the model's free-form `status` word.
+The API applies it twice:
+
+1. `POST /api/diagnose` returns `rca: {eligible, verdict, reason, context}` and adds the
+   `run_rca` action only when eligible.
+2. `POST /api/rca` receives `{context}` back from the UI, **re-checks** eligibility
+   (returns 422 if not applicable), and runs `DataAgent.run_rca(context)`.
+
+The flow is stateless: the tracking context round-trips through the UI, so RCA keeps
+working across API reloads.
+
+### What `run_rca()` does
+
+Same two-phase shape as tracking, with different docs, tool, and prompts:
+
+| | Tracking | RCA |
+|---|---|---|
+| Docs | `AGENT_CONTEXT.md` | `AGENT_CONTEXT.md` + `RCA_CONTEXT.md` + Silver/Gold notebooks (`RCA_DOC_FILES`) |
+| Tool | `SELECT` only | `SELECT` + `DESCRIBE HISTORY <table> [LIMIT n]` |
+| Budget | 12 turns | 15 turns (`MAX_RCA_SQL_CALLS`) |
+| Question | *where* is it? | *why* is it missing/stuck? |
+
+The documented diagnostic path in `RCA_CONTEXT.md`:
+
+1. **Row-level drop rules:** label each Bronze row with the first Silver rule it fails
+   (quantity, region, orphan customer/product, invalid/future date, price; dedup).
+2. **Layer freshness:** compare the record's `ingested_at` with the downstream table's
+   `MAX(processed_at)` / `MAX(aggregated_at)`.
+3. **Table history:** `DESCRIBE HISTORY` shows when Silver/Gold were last rewritten and by which job run.
+4. **Job runs:** `system.lakeflow.job_task_run_timeline` for the `bronze`/`silver`/`gold`
+   tasks. If system tables aren't enabled, this is reported as *missing evidence*, never
+   as "nothing failed".
+
+### RCA response (`POST /api/rca`)
+
+```json
+{
+  "title": "5 - Root Cause Analysis",
+  "entity": {"type": "customer", "id": "5"},
+  "verdict": "ROOT_CAUSE_IDENTIFIED | PROBABLE_CAUSE | INCONCLUSIVE",
+  "confidence": "HIGH | MEDIUM | LOW",
+  "category": "DATA_QUALITY_FILTER",
+  "failingStage": {"fromLayer": "Bronze", "toLayer": "Silver",
+                   "table": "test_catalog.default.clean_orders",
+                   "transformation": "region IS NOT NULL"},
+  "summary": "...",
+  "rootCause": "...",
+  "evidence": [{"finding": "...", "source": "data_query", "reference": "raw_orders", "observed_at": null}],
+  "hypotheses": [{"hypothesis": "...", "confidence": "LOW", "supporting": null, "contradicting": "..."}],
+  "pipelineStatus": "...",
+  "missingEvidence": ["..."],
+  "nextChecks": ["..."],
+  "queries": [{"sql": "...", "row_count": 3, "error": null}]
+}
+```
+
+`category` is one of the failure categories in `RCA_CONTEXT.md` (`SOURCE_MISSING`,
+`NO_UPSTREAM_ACTIVITY`, `DATA_QUALITY_FILTER`, `ORPHAN_REFERENCE`, `DEDUP_SUPERSEDED`,
+`BUSINESS_RULE_EXCLUSION`, `PIPELINE_NOT_RUN`, `PIPELINE_FAILURE`, `UNKNOWN`). Together
+with `failingStage`, it is the input the Phase 2 remediation step will act on. RCA itself
+is diagnosis only.
+
+---
+
 ## Running it
 
 ```bash
@@ -153,4 +225,7 @@ cd databricks-ai-gateway
 
 # Or test the agent directly from the CLI
 ./venv/bin/python -m src.ai_agent "Track whether customer 421 present in all layers"
+
+# Tracking followed by RCA (runs only if the verdict is MISSING/STUCK)
+./venv/bin/python -m src.ai_agent --rca "Track customer 5 across the pipeline"
 ```

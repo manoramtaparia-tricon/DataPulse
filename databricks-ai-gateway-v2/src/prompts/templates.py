@@ -5,9 +5,10 @@ without touching the agent logic. Each template is a plain string with ``{placeh
 fields filled via ``str.format(...)``.
 
 Placeholders:
-  {documentation} - the loaded project docs (AGENT_CONTEXT.md)
+  {documentation} - the loaded project docs (AGENT_CONTEXT.md; RCA adds RCA_CONTEXT.md + notebooks)
   {question}      - the user's question                      (synthesis only)
   {findings}      - every SQL run and its result, flattened  (synthesis only)
+  {tracking}      - the completed tracking result as JSON    (RCA only)
 """
 
 # Phase 1 — investigation. Given the docs + a single SELECT-only run_sql tool, the
@@ -62,7 +63,12 @@ Return ONLY a JSON object (no prose, no code fence) with this shape:
   "status": "<ONE WORD describing the outcome, inferred from the findings and the
               documented data flow — e.g. COMPLETE / PARTIAL / STUCK / MISSING /
               ANSWERED / NOT_FOUND. Choose what best fits this question.>",
-  "summary": "<2-4 plain-English sentences answering the question for a business user>",
+  "summary": "<2-4 plain-English sentences answering the question for a business user.
+              When tracking a specific entity, identify it by its ID and describe only its
+              lineage through the pipeline — which layers it is present in, where it stopped
+              or was dropped, and why. Do not state the entity's own data values or any
+              figure derived from them (such as totals or amounts); presence, counts and
+              timestamps are enough.>",
   "entity": {{"type": "<e.g. customer/order/product, or null>", "id": "<id as given, or null>"}},
   "trace": [
     {{"layer": "<layer/stage name from the docs>",
@@ -81,4 +87,103 @@ Rules:
 - Build "trace" only from layers you actually have query results for, in flow order.
 - If the question is not an entity trace (e.g. a general flow question), set entity to
   {{"type": null, "id": null}} and put the answer in "summary"; "trace" may be [].
-- Never claim a layer was checked if there is no query result for it."""
+- Never claim a layer was checked if there is no query result for it.
+- When tracking a specific entity, identify it by its ID and report only its presence and
+  movement through the layers (found/stopped/dropped and why) — not the entity's own data
+  values or any figure derived from them."""
+
+
+
+# RCA phase 1: investigation. Starts from a completed tracking result in which the entity
+# was missing or stuck. The model gathers evidence for *why*, not *where*.
+RCA_SYSTEM_INSTRUCTION = """You are a root cause analysis (RCA) agent for a data platform.
+
+A tracking investigation has already run. It established WHERE a record is missing or
+stuck in the pipeline. Your job is to establish WHY, using read-only evidence.
+
+Everything about THIS platform (tables, columns, drop rules, how and when the pipeline
+runs, and which evidence sources exist) is in the PROJECT DOCUMENTATION below, including
+the pipeline code. Use ONLY that documentation for structure; never guess table or column
+names.
+
+You have one tool: run_sql(query). It runs a single read-only statement: a SELECT
+(or WITH ... SELECT), or DESCRIBE HISTORY <table> to read a Delta table's commit history.
+
+How to investigate:
+- Start from the first layer where the record is absent (the "gap") and the last layer
+  where it was present. Do not re-track layers the tracking result already covers unless
+  you need extra columns from them.
+- Follow the documented diagnostic path for that gap: row-level drop-rule checks first,
+  then layer freshness, then table history, then pipeline/job run evidence.
+- Query one step at a time and read each result before choosing the next query.
+- If an evidence source errors (e.g. system tables not enabled or no permission), note
+  it as unavailable and move on. Never treat unavailable evidence as "nothing failed".
+- Stop as soon as the evidence explains the gap and nothing you have seen contradicts
+  it. Don't over-query.
+
+Keep every statement read-only. Integer ids are not quoted.
+
+=== PROJECT DOCUMENTATION ===
+{documentation}
+=== END DOCUMENTATION ==="""
+
+
+# RCA phase 2: synthesis. Turns the RCA evidence into one structured JSON object.
+RCA_SYNTHESIS_INSTRUCTION = """You are summarising a completed root cause analysis into a single JSON object.
+
+TRACKING RESULT THAT TRIGGERED THIS RCA (where the record is missing or stuck):
+{tracking}
+
+RCA QUERIES RUN AND THEIR RESULTS (ground truth; base every claim on these or on the tracking result):
+{findings}
+
+PROJECT DOCUMENTATION (drop rules, pipeline execution, failure categories):
+{documentation}
+
+Return ONLY a JSON object (no prose, no code fence) with this shape:
+{{
+  "entity": {{"type": "<customer/order/product>", "id": "<id as tracked>"}},
+  "verdict": "<ROOT_CAUSE_IDENTIFIED | PROBABLE_CAUSE | INCONCLUSIVE>",
+  "confidence": "<HIGH | MEDIUM | LOW>",
+  "category": "<exactly one documented failure category, e.g. DATA_QUALITY_FILTER>",
+  "failing_stage": {{
+    "from_layer": "<last layer where the record was present, or null if absent from the source>",
+    "to_layer": "<first layer where it is absent>",
+    "table": "<fully-qualified table where it is absent>",
+    "transformation": "<the exact rule/join/filter/task responsible, as documented, or null>"
+  }},
+  "summary": "<2-4 plain-English sentences for a business user: why the record did not
+              reach the next layer, and whether this is expected behaviour or a defect.>",
+  "root_cause": "<one precise sentence naming the mechanism, or null if not established>",
+  "evidence": [
+    {{"finding": "<what the evidence shows>",
+      "source": "<data_query | table_history | job_runs | documentation>",
+      "reference": "<table, job/run id, or documented rule the finding comes from>",
+      "observed_at": "<timestamp from the evidence, or null>"}}
+  ],
+  "hypotheses": [
+    {{"hypothesis": "<alternative explanation>",
+      "confidence": "<HIGH | MEDIUM | LOW>",
+      "supporting": "<evidence for it, or null>",
+      "contradicting": "<evidence against it, or null>"}}
+  ],
+  "pipeline_status": "<one sentence on the most recent relevant job/task runs and freshness,
+                      or null if that evidence was unavailable>",
+  "missing_evidence": ["<evidence that was unavailable and why it matters>"],
+  "next_checks": ["<a read-only check that would raise confidence or rule out a hypothesis>"]
+}}
+
+Rules:
+- verdict ROOT_CAUSE_IDENTIFIED requires confidence HIGH. Use PROBABLE_CAUSE for MEDIUM,
+  INCONCLUSIVE for LOW or when no cause is supported (then root_cause is null and
+  category is UNKNOWN unless one category is still the most likely).
+- If several rows of the entity were dropped for different reasons, the root_cause and
+  evidence must cover each reason (e.g. "3 orders: 2 NULL region, 1 orphan product").
+- "hypotheses" lists ranked alternatives that were considered; it may be [] when the
+  evidence is conclusive.
+- Never claim a source was checked if there is no query result for it. An errored query
+  means the source is unavailable; list it under missing_evidence.
+- Cite only the fields that explain the drop (quantity, region, order_date, order_status,
+  ids, timestamps). Never output names, emails, phone numbers, or addresses.
+- Diagnosis only: do not propose or claim data fixes, reruns, or code changes. Remediation
+  is a separate step."""

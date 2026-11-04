@@ -92,7 +92,7 @@ Raw data ingested as-is from source systems. No cleaning or validation is applie
 
 Cleaned, validated, and enriched data. Multiple Bronze sources are joined and transformed here.
 
-- **`test_catalog.default.clean_orders`** — Enriched order data combining orders, customers, and products. Pipeline: `scripts/initial_load/build_pipeline.py`
+- **`test_catalog.default.clean_orders`** — Enriched order data combining orders, customers, and products. Pipeline: `databricks_notebooks/02_build_silver.py` (Job task `silver`)
 
 ### Gold Layer
 
@@ -102,7 +102,7 @@ Business-ready aggregated metrics derived from the Silver layer.
 - **`test_catalog.default.customer_lifetime_value`** — Customer spend, tenure, and behavior metrics
 - **`test_catalog.default.product_performance`** — Product sales, revenue, and reach metrics
 
-Pipeline for all Gold tables: `scripts/initial_load/build_pipeline.py`
+Pipeline for all Gold tables: `databricks_notebooks/03_build_gold.py` (Job task `gold`)
 
 ---
 
@@ -166,7 +166,7 @@ Raw product catalog. **Grain:** one row per product.
 ### Silver
 
 #### `test_catalog.default.clean_orders`
-Validated, deduplicated, enriched order lines — `raw_orders` joined to `raw_customers` and `raw_products`. **Grain:** one row per valid `order_id` (deduplicated to the latest ingestion). Built by `scripts/initial_load/build_pipeline.py`.
+Validated, deduplicated, enriched order lines — `raw_orders` joined to `raw_customers` and `raw_products`. **Grain:** one row per valid `order_id` (deduplicated to the latest ingestion). Built by `databricks_notebooks/02_build_silver.py`.
 
 | Column | Type | Key | Description |
 |--------|------|-----|-------------|
@@ -249,6 +249,48 @@ Per-product sales, revenue, and reach, from `clean_orders` (excludes `cancelled`
 
 ---
 
+## Transformation Rules & Drop Conditions
+
+These are the exact rules (from `databricks_notebooks/02_build_silver.py` and `03_build_gold.py`) that decide whether a record moves to the next layer. Use them to explain *why* a record is absent downstream.
+
+### Bronze → Silver (`clean_orders`)
+
+A `raw_orders` row reaches `clean_orders` only if **all** of the following hold. They are applied in this order:
+
+1. **Pre-dedup validation** (applied *before* deduplication):
+   - `quantity IS NOT NULL AND quantity > 0`
+   - `region IS NOT NULL`
+2. **Deduplication:** among the rows that passed step 1, `ROW_NUMBER() OVER (PARTITION BY order_id ORDER BY ingested_at DESC)`. Only the latest version (`rn = 1`) is a candidate.
+3. **Joins (INNER):**
+   - `customer_id` must exist in `raw_customers` (orphan ids 900–999 are dropped)
+   - `product_id` must exist in `raw_products` (orphan ids 900–999 are dropped)
+4. **Post-join validation:**
+   - `o.rn = 1`
+   - `TRY_CAST(order_date AS DATE) IS NOT NULL` (drops `'INVALID'` dates)
+   - `TRY_CAST(order_date AS DATE) <= CURRENT_DATE()` (drops future dates)
+   - `raw_products.unit_price > 0` (drops orders for products with zero/negative price)
+
+> **Dedup subtlety:** because the joins and the date/price checks run *after* `rn = 1` is picked, if the **latest** version of an order fails a join or the date check, the whole `order_id` is dropped — an older, valid version is **not** used as a fallback. Invalid quantity/region rows, in contrast, are removed before dedup, so an older valid version does survive.
+
+**Entity implications:**
+- **Customer** present in `raw_customers` but absent from `clean_orders` → either the customer has **no orders at all** in `raw_orders` (expected, not a defect), or **every** one of their orders was dropped by the rules above.
+- **Product** present in `raw_products` but absent from `clean_orders` → no orders for it, every order dropped, or its `unit_price <= 0` (drops **all** of its orders).
+- **Order** present in `raw_orders` but absent from `clean_orders` → one of the rules above dropped it.
+
+### Silver → Gold
+
+All three Gold tables are built from `clean_orders` with `WHERE order_status NOT IN ('cancelled', 'returned')`, then aggregated:
+
+- `customer_lifetime_value` — `GROUP BY customer_id, ...` → a customer in `clean_orders` whose orders are **all** `cancelled`/`returned` is absent here.
+- `product_performance` — `GROUP BY product_id, ...` → same rule per product.
+- `daily_revenue` — `GROUP BY order_date, ...` → an order is represented only at **date** level. A `cancelled`/`returned` order is excluded from the totals even if a row for its `order_date` exists (because of other orders that day).
+
+### Rebuild semantics (relevant to "stuck" data)
+
+Silver and Gold are rebuilt with `CREATE OR REPLACE` on every Job run, from the full accumulated Bronze. A record ingested into Bronze **after** the last successful Silver/Gold build will not appear downstream until the next successful run. Compare the record's `ingested_at` with `MAX(processed_at)` in `clean_orders` (and `MAX(aggregated_at)` in Gold) to detect this.
+
+---
+
 ## Data Lineage
 
 ```mermaid
@@ -265,7 +307,7 @@ graph TD
     CO --> PP[product_performance]
 ```
 
-To trace any Gold metric back to its source, follow the lineage through `clean_orders` back to the Bronze tables. The transformation logic is defined in `scripts/initial_load/build_pipeline.py`.
+To trace any Gold metric back to its source, follow the lineage through `clean_orders` back to the Bronze tables. The transformation logic is defined in `databricks_notebooks/02_build_silver.py` (Silver) and `databricks_notebooks/03_build_gold.py` (Gold). `scripts/build_pipeline.py` runs the same SQL locally.
 
 ---
 

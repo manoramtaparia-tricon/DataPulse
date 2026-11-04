@@ -245,3 +245,138 @@
     flex-direction: column;
   }
 }
+
+/* ---------------------------------------------------------------- RCA card */
+
+.tracking-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+  box-shadow: none;
+}
+
+.rca-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.rca-header h2 {
+  margin: 0;
+}
+
+.rca-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.rca-label {
+  margin: 0 0 6px;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #6f7f95;
+}
+
+.rca-stage {
+  margin-bottom: 14px;
+}
+
+.rca-stage-path {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 800;
+  color: #1a2538;
+}
+
+.rca-stage-path > span[aria-hidden] {
+  margin: 0 4px;
+  color: #df7d00;
+}
+
+.rca-table {
+  margin-left: 6px;
+  font-weight: 500;
+  color: #6f7f95;
+}
+
+.rca-transformation {
+  display: inline-block;
+  max-width: 100%;
+  margin-top: 6px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: #eef1f6;
+  color: #243247;
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+.rca-root-cause {
+  margin: 0 0 6px;
+  font-weight: 700;
+  color: #243247;
+}
+
+.rca-section {
+  margin-bottom: 14px;
+}
+
+.rca-text {
+  margin: 0;
+  color: #3c4a61;
+}
+
+.rca-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 18px;
+  color: #3c4a61;
+}
+
+.rca-source {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: #e6efff;
+  color: #2a6df5;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.rca-meta {
+  display: block;
+  font-size: 0.85rem;
+  color: #6f7f95;
+  overflow-wrap: anywhere;
+}
+
+.rca-queries {
+  margin-top: 4px;
+  color: #3c4a61;
+}
+
+.rca-queries summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.rca-query {
+  margin-top: 10px;
+}
+
+.rca-query pre {
+  margin: 0 0 4px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #f4f6fa;
+  font-size: 0.8rem;
+  white-space: pre-wrap;
+  overflow-x: auto;
+}
