@@ -57,9 +57,9 @@ SELECT r.order_id, r.customer_id, r.product_id, r.quantity, r.region, r.order_da
          WHEN p.unit_price <= 0                                 THEN 'NON_POSITIVE_PRICE'
          ELSE 'PASSES_RULES'
        END AS rule_check
-FROM test_catalog.default.raw_orders r
-LEFT JOIN test_catalog.default.raw_customers c ON r.customer_id = c.customer_id
-LEFT JOIN test_catalog.default.raw_products  p ON r.product_id  = p.product_id
+FROM test_catalog.bronze.raw_orders r
+LEFT JOIN test_catalog.bronze.raw_customers c ON r.customer_id = c.customer_id
+LEFT JOIN test_catalog.bronze.raw_products  p ON r.product_id  = p.product_id
 WHERE r.customer_id = <id>
 ORDER BY r.order_id, r.ingested_at DESC
 ```
@@ -77,8 +77,8 @@ was in the future at `MAX(processed_at)` will pass on the next successful run.
 ### 2. Layer freshness (always available)
 
 ```sql
-SELECT MAX(processed_at)  AS last_silver_build FROM test_catalog.default.clean_orders;
-SELECT MAX(aggregated_at) AS last_gold_build   FROM test_catalog.default.customer_lifetime_value;
+SELECT MAX(processed_at)  AS last_silver_build FROM test_catalog.silver.clean_orders;
+SELECT MAX(aggregated_at) AS last_gold_build   FROM test_catalog.gold.customer_lifetime_value;
 ```
 
 If the entity's Bronze `ingested_at` is **later** than the downstream table's last build,
