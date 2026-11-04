@@ -7,14 +7,14 @@
     </div>
 
     <section class="messages" aria-live="polite">
-      @for (message of messages; track $index) {
+      @for (message of messages; track $index; let messageIndex = $index) {
         <div class="message-row" [class.user]="message.sender === 'user'" [class.assistant]="message.sender === 'assistant'">
           <div class="avatar">{{ message.sender === 'user' ? 'U' : 'A' }}</div>
-          <div class="bubble" [class.loading]="message.kind === 'loading'" [class.tracking-message]="message.kind === 'tracking'">
+          <div class="bubble" [class.loading]="message.kind === 'loading'" [class.tracking-message]="message.kind === 'tracking' || message.kind === 'rca'">
             @if (message.kind === 'loading') {
               <div class="loading-copy">
                 <div class="loading-title-row">
-                  <p class="loading-title">Checking the data for {{ project.title }}...</p>
+                  <p class="loading-title">{{ message.loaderTitle }}</p>
                   <span class="typing-dots" aria-hidden="true">
                     <span></span>
                     <span></span>
@@ -22,7 +22,7 @@
                   </span>
                 </div>
                 <ul>
-                  @for (step of loaderSteps; track step; let stepIndex = $index) {
+                  @for (step of message.loaderSteps ?? loaderSteps; track step; let stepIndex = $index) {
                     <li [class.active]="stepIndex === activeLoaderStepIndex">{{ step }}</li>
                   }
                 </ul>
@@ -57,12 +57,131 @@
                 </div>
 
                 <div class="tracking-actions">
-                  @for (action of message.tracking.actions; track action.label) {
-                    <button type="button" class="tracking-action" [class.primary]="action.tone === 'primary'" [class.secondary]="action.tone === 'secondary'">
-                      {{ action.label }}
+                  @for (action of visibleActions(message.tracking); track action.label) {
+                    <button
+                      type="button"
+                      class="tracking-action"
+                      [class.primary]="action.tone === 'primary'"
+                      [class.secondary]="action.tone === 'secondary'"
+                      [disabled]="isActionDisabled(action, message)"
+                      (click)="onAction(action, messageIndex)"
+                    >
+                      {{ actionLabel(action, message) }}
                     </button>
                   }
                 </div>
+              </div>
+            } @else if (message.kind === 'rca' && message.rca) {
+              @let rca = message.rca;
+              <div class="tracking-card rca-card">
+                <div class="tracking-card-header rca-header">
+                  <h2>{{ rca.title }}</h2>
+                  <div class="rca-badges">
+                    <span class="tracking-badge" [class]="verdictTone(rca.verdict)">{{ humanize(rca.verdict) }}</span>
+                    <span class="tracking-badge muted">Confidence: {{ humanize(rca.confidence) }}</span>
+                  </div>
+                </div>
+
+                <div class="rca-stage">
+                  <p class="rca-label">Failing stage</p>
+                  <p class="rca-stage-path">
+                    {{ rca.failingStage.fromLayer ?? 'Source' }}
+                    <span aria-hidden="true">→</span>
+                    {{ rca.failingStage.toLayer ?? '--' }}
+                    @if (rca.failingStage.table) {
+                      <span class="rca-table">{{ shortTable(rca.failingStage.table) }}</span>
+                    }
+                  </p>
+                  @if (rca.failingStage.transformation) {
+                    <code class="rca-transformation">{{ rca.failingStage.transformation }}</code>
+                  }
+                </div>
+
+                <div class="tracking-summary">
+                  <div class="tracking-summary-icon">?</div>
+                  <div>
+                    <p class="tracking-summary-title">{{ humanize(rca.category) }}</p>
+                    <p class="rca-root-cause">{{ rca.rootCause ?? 'Root cause not established.' }}</p>
+                    <p class="tracking-summary-text">{{ rca.summary }}</p>
+                  </div>
+                </div>
+
+                @if (rca.evidence.length) {
+                  <section class="rca-section">
+                    <p class="rca-label">Evidence</p>
+                    <ul class="rca-list">
+                      @for (item of rca.evidence; track $index) {
+                        <li>
+                          <span class="rca-source">{{ humanize(item.source) }}</span>
+                          {{ item.finding }}
+                          @if (item.reference || item.observed_at) {
+                            <span class="rca-meta">{{ item.reference }}{{ item.reference && item.observed_at ? ' · ' : '' }}{{ item.observed_at }}</span>
+                          }
+                        </li>
+                      }
+                    </ul>
+                  </section>
+                }
+
+                @if (rca.pipelineStatus) {
+                  <section class="rca-section">
+                    <p class="rca-label">Pipeline status</p>
+                    <p class="rca-text">{{ rca.pipelineStatus }}</p>
+                  </section>
+                }
+
+                @if (rca.hypotheses.length) {
+                  <section class="rca-section">
+                    <p class="rca-label">Other hypotheses considered</p>
+                    <ol class="rca-list">
+                      @for (item of rca.hypotheses; track $index) {
+                        <li>
+                          {{ item.hypothesis }} <span class="rca-meta">({{ humanize(item.confidence) }})</span>
+                          @if (item.supporting) {
+                            <span class="rca-meta">For: {{ item.supporting }}</span>
+                          }
+                          @if (item.contradicting) {
+                            <span class="rca-meta">Against: {{ item.contradicting }}</span>
+                          }
+                        </li>
+                      }
+                    </ol>
+                  </section>
+                }
+
+                @if (rca.missingEvidence.length) {
+                  <section class="rca-section">
+                    <p class="rca-label">Missing evidence</p>
+                    <ul class="rca-list">
+                      @for (item of rca.missingEvidence; track $index) {
+                        <li>{{ item }}</li>
+                      }
+                    </ul>
+                  </section>
+                }
+
+                @if (rca.nextChecks.length) {
+                  <section class="rca-section">
+                    <p class="rca-label">Next checks</p>
+                    <ul class="rca-list">
+                      @for (item of rca.nextChecks; track $index) {
+                        <li>{{ item }}</li>
+                      }
+                    </ul>
+                  </section>
+                }
+
+                @if (rca.queries.length) {
+                  <details class="rca-queries">
+                    <summary>Executed queries ({{ rca.queries.length }})</summary>
+                    @for (query of rca.queries; track $index) {
+                      <div class="rca-query">
+                        <pre>{{ query.sql }}</pre>
+                        <span class="rca-meta">{{ query.error ? 'Unavailable: ' + query.error : (query.row_count ?? 0) + ' rows' }}</span>
+                      </div>
+                    }
+                  </details>
+                }
               </div>
             } @else {
               <p>{{ message.text }}</p>
