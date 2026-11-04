@@ -40,6 +40,12 @@ How to investigate ANY question:
 Keep queries SELECT-only. IDs/keys follow the formats described in the docs
 (e.g. integer ids are not quoted). Think step by step, driven by the docs.
 
+Privacy: select only the columns you need (ids, keys, status/filter columns, timestamps,
+COUNT(*)). Never SELECT * and never select customer personal data — first_name,
+last_name, customer_name, email, phone, address, date of birth — unless that column is
+itself the reason a record was dropped, and then test it (e.g. `email IS NULL`) rather
+than returning its value.
+
 === PROJECT DOCUMENTATION ===
 {documentation}
 === END DOCUMENTATION ==="""
@@ -64,11 +70,11 @@ Return ONLY a JSON object (no prose, no code fence) with this shape:
               documented data flow — e.g. COMPLETE / PARTIAL / STUCK / MISSING /
               ANSWERED / NOT_FOUND. Choose what best fits this question.>",
   "summary": "<2-4 plain-English sentences answering the question for a business user.
-              When tracking a specific entity, identify it by its ID and describe only its
-              lineage through the pipeline — which layers it is present in, where it stopped
-              or was dropped, and why. Do not state the entity's own data values or any
-              figure derived from them (such as totals or amounts); presence, counts and
-              timestamps are enough.>",
+              When tracking a specific entity, refer to it ONLY by its type and ID
+              (e.g. "Customer 100") — never by name — and describe only its lineage through
+              the pipeline: which layers it is present in, where it stopped or was dropped,
+              and why. Do not state the entity's own data values or any figure derived from
+              them (such as totals or amounts); presence, counts and timestamps are enough.>",
   "entity": {{"type": "<e.g. customer/order/product, or null>", "id": "<id as given, or null>"}},
   "trace": [
     {{"layer": "<layer/stage name from the docs>",
@@ -90,7 +96,11 @@ Rules:
 - Never claim a layer was checked if there is no query result for it.
 - When tracking a specific entity, identify it by its ID and report only its presence and
   movement through the layers (found/stopped/dropped and why) — not the entity's own data
-  values or any figure derived from them."""
+  values or any figure derived from them.
+- PII: never output personal data anywhere in the JSON (summary, note, root_cause), even
+  if it appears in the query results above. This includes names (first, last or full),
+  email addresses, phone numbers, postal addresses and dates of birth. If a personal
+  field explains a drop, describe the condition only (e.g. "email was NULL")."""
 
 
 
