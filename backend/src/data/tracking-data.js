@@ -35,11 +35,6 @@ const trackingData = {
         id: 'run_rca',
         label: 'Run RCA Analysis',
         tone: 'primary'
-      },
-      {
-        id: 'view_queries',
-        label: 'View Executed Queries',
-        tone: 'secondary'
       }
     ]
   }

@@ -122,7 +122,6 @@ def to_ui_shape(result, question):
     actions = []
     if rca["eligible"]:
         actions.append({"id": "run_rca", "label": "Run RCA Analysis", "tone": "primary"})
-    actions.append({"id": "view_queries", "label": "View Executed Queries", "tone": "secondary"})
     return {
         "title": f"{label} - Tracking Results",
         "customerId": label,
