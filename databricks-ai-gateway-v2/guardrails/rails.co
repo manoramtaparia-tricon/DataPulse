@@ -1,0 +1,14 @@
+define bot refuse to respond
+  "This content was blocked by the DataPulse safety policy."
+
+define flow datapulse input policy
+  $allowed = execute datapulse_check_input
+  if not $allowed
+    bot refuse to respond
+    stop
+
+define flow datapulse output policy
+  $allowed = execute datapulse_check_output
+  if not $allowed
+    bot refuse to respond
+    stop

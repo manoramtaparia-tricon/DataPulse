@@ -62,6 +62,8 @@ This installs:
 - `databricks-sql-connector` — connects to Databricks SQL Warehouse from Python
 - `python-dotenv` — loads credentials from `.env` file
 - `google-genai` — Google Gemini AI SDK
+- `fastapi` and `uvicorn` - serve the HTTP API
+- `nemoguardrails` - enforce input and output safety checks on API requests
 
 ---
 
@@ -71,6 +73,7 @@ Edit the `.env` file with your values:
 
 ```
 GEMINI_API_KEY="your-gemini-api-key"
+GUARDRAILS_MODEL="gemini-3.5-flash-lite"
 
 DATABRICKS_HOST="your-workspace.cloud.databricks.com"
 DATABRICKS_TOKEN="your-personal-access-token"
@@ -195,6 +198,15 @@ uvicorn src.ui_api:app --port 3001 --reload
 This serves `POST /api/diagnose` on port **3001** — the port the Angular UI's
 `project-chat.service.ts` is configured to call. See `AGENT_FLOW.md` for the full
 request-to-response flow.
+
+The API checks questions before investigation and checks both the agent result
+and UI response before returning them. Policy blocks return HTTP 403 with code
+`GUARDRAIL_BLOCKED` and an `input` or `output` stage. Failed safety checks return
+HTTP 503 with code `GUARDRAIL_UNAVAILABLE`; unchecked responses are never returned.
+`GUARDRAILS_MODEL` is optional and defaults to `gemini-3.5-flash-lite`, using the
+agent's Gemini client and API key. Direct command-line agent calls are not
+guarded. See [the guardrails guide](../guardrails/README.md) for policy details
+and offline regression tests.
 
 > Docs are loaded at **startup**, and `--reload` only watches `.py` files — restart
 > the server after editing `AGENT_CONTEXT.md` for changes to take effect.

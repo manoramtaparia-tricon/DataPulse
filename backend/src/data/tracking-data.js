@@ -5,13 +5,6 @@ const trackingData = {
     projectTitle: 'Customer Data Platform',
     timeline: [
       {
-        stage: 'Source',
-        detail: 'customer_events',
-        status: 'Found',
-        timestamp: '2024-03-20 10:15',
-        tone: 'success'
-      },
-      {
         stage: 'Bronze',
         detail: 'raw data',
         status: 'Found',
@@ -24,13 +17,6 @@ const trackingData = {
         status: 'Found',
         timestamp: '2024-03-20 10:30',
         tone: 'success'
-      },
-      {
-        stage: 'Reconciliation',
-        detail: 'waiting for account match',
-        status: 'Stuck',
-        timestamp: 'Waiting for account match',
-        tone: 'warning'
       },
       {
         stage: 'Gold',

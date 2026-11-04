@@ -1,0 +1,16 @@
+models: []
+
+rails:
+  input:
+    flows:
+      - datapulse input policy
+  output:
+    flows:
+      - datapulse output policy
+  dialog:
+    user_messages:
+      embeddings_only: true
+
+core:
+  embedding_search_provider:
+    name: simple
